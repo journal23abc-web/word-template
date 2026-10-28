@@ -1,0 +1,554 @@
+/* UI task pane "Template Paste" */
+(function () {
+  "use strict";
+  const E = window.TplEngine;
+  const STORE = "tplpaste.v1";
+  const $ = (s, el) => (el || document).querySelector(s);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const fmtN = (n) => Number(n || 0).toLocaleString("id-ID");
+
+  const state = {
+    inWord: false,
+    store: { active: null, profiles: {} },
+    profile: null,
+    mode: "section",
+    pending: {}, // key -> {blocks:[], overrides:{}, items:[], images:0}
+    found: {},
+    open: {},
+  };
+
+  /* ---------------- penyimpanan profil ---------------- */
+  function loadStore() {
+    try {
+      const raw = localStorage.getItem(STORE);
+      if (raw) state.store = JSON.parse(raw);
+    } catch (e) { /* localStorage tidak tersedia */ }
+    if (!state.store.profiles || !Object.keys(state.store.profiles).length) {
+      const d = E.clone(E.DEFAULT_PROFILE);
+      state.store = { active: d.name, profiles: { [d.name]: d } };
+    }
+    if (!state.store.profiles[state.store.active]) state.store.active = Object.keys(state.store.profiles)[0];
+    state.profile = E.mergeProfile(state.store.profiles[state.store.active]);
+    state.mode = state.profile.layout.insertMode || "section";
+  }
+  let saveTimer = null;
+  function saveStore() {
+    state.store.profiles[state.store.active] = state.profile;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { try { localStorage.setItem(STORE, JSON.stringify(state.store)); } catch (e) { /* abaikan */ } }, 250);
+    $("#profileLabel").textContent = state.store.active;
+  }
+
+  /* ---------------- toast ---------------- */
+  let toastTimer;
+  function toast(msg, kind, ms) {
+    const t = $("#toast");
+    t.textContent = msg;
+    t.className = "toast show " + (kind || "");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (t.className = "toast"), ms || (kind === "err" ? 7000 : 3500));
+  }
+  function errMsg(e) {
+    let m = (e && e.message) || String(e);
+    if (e && e.debugInfo && e.debugInfo.errorLocation) m += " (" + e.debugInfo.errorLocation + ")";
+    return m;
+  }
+  function needWord() {
+    if (!state.inWord) { toast("Buka add-in ini dari Microsoft Word untuk menyisipkan ke dokumen.", "err"); return false; }
+    return true;
+  }
+
+  /* ---------------- tab ---------------- */
+  function initTabs() {
+    document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === b));
+      ["paste", "words", "template"].forEach((k) => $("#tab-" + k).classList.toggle("hidden", k !== b.dataset.tab));
+      if (b.dataset.tab === "words") recount();
+    }));
+  }
+
+  /* ---------------- mode sisip ---------------- */
+  function initMode() {
+    const hints = {
+      section: "Isi ditambahkan di bawah konten yang sudah ada pada bagian tersebut. Judul bagian dibuat otomatis bila belum ada.",
+      cursor: "Isi disisipkan di posisi kursor. Bila kursor di baris kosong, isi masuk tepat di baris itu.",
+    };
+    const sync = () => {
+      document.querySelectorAll("#modeSeg button").forEach((b) => b.classList.toggle("on", b.dataset.mode === state.mode));
+      $("#modeHint").textContent = hints[state.mode];
+    };
+    document.querySelectorAll("#modeSeg button").forEach((b) => b.addEventListener("click", () => {
+      state.mode = b.dataset.mode; state.profile.layout.insertMode = state.mode; saveStore(); sync();
+    }));
+    sync();
+  }
+
+  /* ---------------- kartu bagian ---------------- */
+  const TYPE_OPTS = [
+    ["body", "Isi"], ["heading2", "Heading 2"], ["heading3", "Heading 3"],
+    ["caption", "Caption"], ["note", "Catatan"], ["ref", "Referensi"], ["table", "Tabel"], ["skip", "Lewati"],
+  ];
+  const typeKey = (it) => (it.type === "heading" ? "heading" + (it.level || 2) : it.type);
+
+  function pend(key) {
+    return state.pending[key] || (state.pending[key] = { blocks: [], overrides: {}, items: [], images: 0 });
+  }
+  function sec(key) { return state.profile.sections.find((s) => s.key === key); }
+
+  function reclassify(key) {
+    const p = pend(key);
+    p.items = E.classify(p.blocks, sec(key), state.profile);
+    Object.entries(p.overrides).forEach(([i, v]) => {
+      const it = p.items[i];
+      if (!it) return;
+      if (v.startsWith("heading")) { it.type = "heading"; it.level = +v.slice(7); }
+      else it.type = v;
+    });
+  }
+
+  function runsHtml(runs, max) {
+    let out = "", n = 0;
+    for (const r of runs || []) {
+      if (n >= max) break;
+      let t = r.text.slice(0, max - n); n += t.length;
+      t = esc(t);
+      if (r.i) t = "<i>" + t + "</i>";
+      if (r.b) t = "<b>" + t + "</b>";
+      out += t;
+    }
+    return out + (n >= max ? "…" : "");
+  }
+
+  function itemWords(items) {
+    return items.filter((i) => i.type !== "skip").reduce((a, i) => a + (i.type === "table" ? 0 : E.countWords(E.plain(i.runs))), 0);
+  }
+
+  function renderSections() {
+    const host = $("#sections");
+    host.innerHTML = "";
+    for (const s of state.profile.sections) {
+      const p = pend(s.key);
+      const live = p.items.filter((i) => i.type !== "skip");
+      const card = document.createElement("section");
+      card.className = "sec" + (state.open[s.key] ? " open" : "");
+      card.dataset.key = s.key;
+      const docPill = state.inWord ? (state.found[s.key] ? '<span class="pill indoc" title="Judul bagian ditemukan di dokumen">ada</span>' : '<span class="pill new" title="Judul bagian akan dibuat otomatis">baru</span>') : "";
+      card.innerHTML = `
+        <div class="sec-head">
+          <svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+          <div class="sec-title">${esc(s.title)}</div>
+          ${live.length ? `<span class="pill ready">${live.length} siap · ${fmtN(itemWords(p.items))} kata</span>` : ""}
+          ${docPill}
+        </div>
+        <div class="sec-body">
+          <div class="drop" contenteditable="true" spellcheck="false" data-key="${esc(s.key)}">Klik di sini lalu tekan Ctrl+V (⌘V) untuk menempel isi ${esc(titleCase(s.title))}</div>
+          ${p.images ? `<p class="warnline">${p.images} gambar di tempelan diabaikan — sisipkan gambar langsung di Word.</p>` : ""}
+          <div class="preview ${p.items.length ? "" : "hidden"}"></div>
+          <div class="sec-meta ${p.items.length ? "" : "hidden"}">${summary(p.items)}</div>
+          <div class="sec-actions">
+            <button class="btn primary small act-insert" ${live.length ? "" : "disabled"}>Sisipkan ke dokumen</button>
+            <button class="btn small act-reformat" title="Terapkan format template ke isi yang sudah ada di bagian ini">Rapikan isi yang ada</button>
+            <button class="btn small ghost act-clear" ${p.items.length ? "" : "disabled"}>Kosongkan</button>
+          </div>
+        </div>`;
+      host.appendChild(card);
+      renderPreview(card, s.key);
+
+      card.querySelector(".sec-head").addEventListener("click", () => { state.open[s.key] = !state.open[s.key]; card.classList.toggle("open"); });
+      const drop = card.querySelector(".drop");
+      drop.addEventListener("paste", (ev) => onPaste(ev, s.key, drop));
+      drop.addEventListener("keydown", (ev) => { if (!(ev.ctrlKey || ev.metaKey) && ev.key.length === 1) ev.preventDefault(); });
+      drop.addEventListener("drop", (ev) => ev.preventDefault());
+      card.querySelector(".act-insert").addEventListener("click", () => doInsert([s.key]));
+      card.querySelector(".act-reformat").addEventListener("click", () => doReformat(s.key));
+      card.querySelector(".act-clear").addEventListener("click", () => { state.pending[s.key] = null; renderSections(); });
+    }
+  }
+
+  function summary(items) {
+    const c = (t, l) => items.filter((i) => i.type === t && (l == null || i.level === l)).length;
+    const parts = [];
+    if (c("body")) parts.push(c("body") + " paragraf");
+    if (c("heading")) parts.push(c("heading") + " sub-heading");
+    if (c("ref")) parts.push(c("ref") + " referensi");
+    if (c("caption")) parts.push(c("caption") + " caption");
+    if (c("table")) parts.push(c("table") + " tabel");
+    if (c("note")) parts.push(c("note") + " catatan");
+    return parts.join(" · ") + (parts.length ? ". Ubah jenis lewat menu di kiri bila deteksi keliru." : "");
+  }
+
+  function renderPreview(card, key) {
+    const p = pend(key);
+    const box = card.querySelector(".preview");
+    box.innerHTML = "";
+    p.items.forEach((it, i) => {
+      const row = document.createElement("div");
+      row.className = "prow t-" + it.type + (it.level === 3 ? " l3" : "");
+      const sel = document.createElement("select");
+      TYPE_OPTS.forEach(([v, l]) => {
+        if (v === "table" && it.type !== "table") return;
+        if (it.type === "table" && !["table", "skip"].includes(v)) return;
+        const o = document.createElement("option"); o.value = v; o.textContent = l; sel.appendChild(o);
+      });
+      sel.value = typeKey(it);
+      sel.addEventListener("change", () => {
+        p.overrides[i] = sel.value; reclassify(key);
+        const open = state.open[key]; renderSections(); state.open[key] = open;
+      });
+      const txt = document.createElement("div");
+      txt.className = "txt";
+      txt.innerHTML = it.type === "table" ? esc(`Tabel ${it.rows.length} baris × ${Math.max(...it.rows.map((r) => r.length))} kolom: ${it.rows[0].join(" | ")}`).slice(0, 200) : runsHtml(it.runs, 180);
+      row.append(sel, txt);
+      box.appendChild(row);
+    });
+  }
+
+  function titleCase(s) { return E.titleCase(String(s).toLowerCase()); }
+
+  function onPaste(ev, key, drop) {
+    ev.preventDefault();
+    const cd = ev.clipboardData || window.clipboardData;
+    const clip = { html: cd.getData("text/html") || "", text: cd.getData("text/plain") || cd.getData("Text") || "" };
+    const parsed = E.parseInput(clip, sec(key), state.profile);
+    if (!parsed.blocks.length) { toast("Tidak ada teks yang terbaca dari clipboard.", "err"); return; }
+    const p = pend(key);
+    p.blocks = p.blocks.concat(parsed.blocks);
+    p.images += parsed.images || 0;
+    reclassify(key);
+    state.open[key] = true;
+    renderSections();
+    const d = document.querySelector(`.drop[data-key="${CSS.escape(key)}"]`);
+    if (d) { d.classList.add("flash"); d.textContent = `✓ ${parsed.blocks.length} blok ditambahkan — tempel lagi untuk menambah`; setTimeout(() => d.classList.remove("flash"), 1500); }
+  }
+
+  /* ---------------- aksi Word ---------------- */
+  async function doInsert(keys) {
+    if (!needWord()) return;
+    const todo = keys.filter((k) => pend(k).items.some((i) => i.type !== "skip"));
+    if (!todo.length) { toast("Belum ada isi yang ditempel."); return; }
+    if (state.mode === "cursor" && todo.length > 1) { toast("Mode kursor hanya untuk satu bagian sekaligus. Pilih 'Akhir bagian'.", "err"); return; }
+    setBusy(true);
+    try {
+      let last = null, total = 0;
+      for (const k of todo) {
+        const items = pend(k).items;
+        last = await WordOps.insertSection(k, items, state.profile, state.mode);
+        total += last.inserted;
+        if (last.missingStyles && last.missingStyles.length) toast("Gaya tidak ditemukan, dipakai Normal: " + last.missingStyles.join(", "), "err");
+        state.pending[k] = null;
+      }
+      await refreshScan();
+      renderSections();
+      const c = last.count;
+      const over = c.limit && c.total > c.limit;
+      toast(`✓ ${total} blok disisipkan. Total isi ${fmtN(c.total)}${c.limit ? " / " + fmtN(c.limit) : ""} kata${over ? " — MELEBIHI BATAS" : ""}.`, over ? "err" : "ok", 6000);
+    } catch (e) {
+      console.error(e);
+      toast("Gagal menyisipkan: " + errMsg(e), "err");
+    } finally { setBusy(false); }
+  }
+
+  async function doReformat(key) {
+    if (!needWord()) return;
+    setBusy(true);
+    try {
+      const r = await WordOps.reformatSection(key, state.profile);
+      toast(`✓ ${r.formatted} paragraf dirapikan (${r.headings} sub-heading).`, "ok");
+    } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
+  }
+
+  async function doUndo() {
+    if (!needWord()) return;
+    try {
+      const ok = await WordOps.undoLast();
+      toast(ok ? "✓ Sisipan terakhir dihapus." : "Tidak ada sisipan yang bisa dihapus.", ok ? "ok" : "");
+      await refreshScan(); renderSections();
+    } catch (e) { toast(errMsg(e), "err"); }
+  }
+
+  function setBusy(b) {
+    document.querySelectorAll("button").forEach((x) => { if (b) { x.dataset.wasDisabled = x.disabled ? "1" : ""; x.disabled = true; } else x.disabled = x.dataset.wasDisabled === "1"; });
+    document.body.style.cursor = b ? "progress" : "";
+  }
+
+  async function refreshScan() {
+    if (!state.inWord) return;
+    try { const r = await WordOps.scan(state.profile); state.found = r.found; state.lastCount = r.count; } catch (e) { console.warn(e); }
+  }
+
+  /* ---------------- hitung kata ---------------- */
+  async function recount() {
+    if (!state.inWord) { renderCounts(null); return; }
+    try { state.lastCount = await WordOps.countWords(state.profile); renderCounts(state.lastCount); }
+    catch (e) { toast(errMsg(e), "err"); }
+  }
+  function renderCounts(c) {
+    const T = $("#wordTotals"), W = $("#wordTable");
+    if (!c) { T.innerHTML = '<p class="hint">Buka di Word untuk menghitung kata dokumen.</p>'; W.innerHTML = ""; return; }
+    const card = (label, n, lim) => {
+      const over = lim && n > lim;
+      const pct = lim ? Math.min(100, (n / lim) * 100) : 0;
+      return `<div class="total-card ${over ? "over" : ""}"><div class="of">${label}</div>
+        <div><span class="big">${fmtN(n)}</span> <span class="of">${lim ? "/ " + fmtN(lim) + " kata" : "kata"}${over ? " · lebih " + fmtN(n - lim) : lim ? " · sisa " + fmtN(lim - n) : ""}</span></div>
+        ${lim ? `<div class="bar ${over ? "over" : ""}"><span style="width:${pct}%"></span></div>` : ""}</div>`;
+    };
+    T.innerHTML = card("Isi artikel" + (state.profile.limits.countReferences ? " (termasuk referensi)" : " (tanpa referensi)"), c.total, c.limit) + card("Abstrak", c.abstract, c.abstractLimit);
+    W.innerHTML = `<table class="wtable">${c.sections.map((s) => `<tr class="${s.counted ? "" : "nc"}"><td>${esc(s.title)}</td><td class="n">${fmtN(s.words)}</td></tr>`).join("")}</table>
+      ${c.sections.length ? "" : '<p class="hint">Belum ada judul bagian yang dikenali di dokumen.</p>'}`;
+  }
+
+  /* ---------------- editor template ---------------- */
+  const ALIGN = [["Left", "Kiri"], ["Centered", "Tengah"], ["Right", "Kanan"], ["Justified", "Justify"]];
+  const paraFields = (opt) => [
+    ["size", "Ukuran font (pt)", "number", { step: 0.5, min: 6 }],
+    ...(opt.bold ? [["bold", "Tebal (bold)", "bool"], ["italic", "Miring (italic)", "bool"]] : []),
+    ...(opt.caps ? [["caps", "HURUF KAPITAL", "bool"]] : []),
+    ["align", "Perataan", "select", { options: ALIGN }],
+    ...(opt.indent ? [["firstIndentCm", "Indentasi baris pertama (cm)", "number", { step: 0.01 }]] : []),
+    ...(opt.hanging ? [["hangingCm", "Indentasi gantung / hanging (cm)", "number", { step: 0.01 }]] : []),
+    ["before", "Spasi sebelum (pt)", "number", { step: 1, min: 0 }],
+    ["after", "Spasi sesudah (pt)", "number", { step: 1, min: 0 }],
+    ["line", "Spasi baris (1 = tunggal)", "number", { step: 0.05, min: 0.5 }],
+    ["style", "Gaya Word (style)", "text", { desc: "Biarkan Normal kecuali jurnal memakai gaya khusus; tulis persis seperti di Word." }],
+  ];
+  const GROUPS = [
+    { title: "Umum & batas kata", fields: [
+      ["font", "Font", "text"], ["color", "Warna teks", "color"],
+      ["limits.bodyWords", "Batas kata isi artikel", "number", { step: 50, min: 0, desc: "Dihitung dari judul bagian pertama sampai sebelum referensi. 0 = tanpa batas." }],
+      ["limits.abstractWords", "Batas kata abstrak", "number", { step: 10, min: 0 }],
+      ["limits.countReferences", "Referensi ikut dihitung", "bool"],
+      ["limits.countTables", "Teks dalam tabel ikut dihitung", "bool"],
+      ["layout.blankBeforeSection", "Sisakan baris kosong sebelum judul bagian berikutnya", "bool"],
+    ] },
+    { title: "Judul bagian (INTRODUCTION, METHOD, …)", prefix: "sectionHeading", fields: paraFields({ bold: true, caps: true }) },
+    { title: "Sub-heading tingkat 2", prefix: "h2", fields: paraFields({ bold: true }) },
+    { title: "Sub-heading tingkat 3", prefix: "h3", fields: paraFields({ bold: true }) },
+    { title: "Paragraf isi", prefix: "body", fields: paraFields({ indent: true }) },
+    { title: "Caption tabel & gambar", prefix: "caption", fields: [["labelBold", "Label \"Table 1.\" tebal", "bool"], ...paraFields({})] },
+    { title: "Catatan tabel (Note.)", prefix: "note", fields: [["labelItalic", "Label \"Note.\" miring", "bool"], ...paraFields({})] },
+    { title: "Tabel yang ditempel", prefix: "table", fields: [
+      ["size", "Ukuran font tabel (pt)", "number", { step: 0.5 }], ["headerBold", "Baris judul tebal", "bool"],
+      ["apaBorders", "Garis gaya APA (atas, bawah, bawah judul)", "bool"], ["firstColLeft", "Kolom pertama rata kiri", "bool"],
+    ] },
+    { title: "Referensi", prefix: "references", fields: [
+      ...paraFields({ hanging: true }),
+      ["autoItalic", "Italic otomatis APA (nama jurnal, volume / judul buku) bila tempelan tanpa italic", "bool"],
+      ["linkDoi", "Jadikan DOI/URL hyperlink", "bool"],
+      ["stripNumbering", "Hapus penomoran [1] / 1.", "bool"],
+      ["sort", "Urutkan A–Z (yang ditempel)", "bool"],
+    ] },
+    { title: "Deteksi otomatis", prefix: "detect", fields: [
+      ["maxHeadingWords", "Maks. kata untuk sub-heading", "number", { step: 1, min: 3 }],
+      ["stripHeadingNumbers", "Hapus nomor heading (2.1, A.)", "bool"],
+      ["titleCaseHeadings", "Ubah sub-heading ke Title Case", "bool"],
+      ["keepItalic", "Pertahankan italic dari tempelan", "bool"],
+      ["keepBold", "Pertahankan bold di dalam paragraf", "bool"],
+      ["keepSupSub", "Pertahankan superscript/subscript", "bool"],
+      ["mergeBrokenLines", "Sambung baris terputus (salinan PDF)", "bool"],
+      ["requireCapsSectionTitle", "Judul bagian di dokumen ditulis KAPITAL", "bool", { desc: "Membedakan judul bagian RESULTS dari sub-heading Results." }],
+    ] },
+  ];
+
+  const getPath = (o, p) => p.split(".").reduce((a, k) => (a == null ? a : a[k]), o);
+  const setPath = (o, p, v) => { const ks = p.split("."); let a = o; ks.slice(0, -1).forEach((k) => (a = a[k] = a[k] || {})); a[ks[ks.length - 1]] = v; };
+
+  function renderTemplate() {
+    const sel = $("#profileSelect");
+    sel.innerHTML = Object.keys(state.store.profiles).map((n) => `<option ${n === state.store.active ? "selected" : ""}>${esc(n)}</option>`).join("");
+    const form = $("#templateForm");
+    form.innerHTML = "";
+    GROUPS.forEach((g, gi) => {
+      const fs = document.createElement("fieldset");
+      const det = document.createElement("details");
+      if (gi === 0) det.open = true;
+      det.innerHTML = `<summary>${esc(g.title)}</summary>`;
+      const grid = document.createElement("div");
+      grid.className = "fgrid";
+      g.fields.forEach(([k, label, type, opt]) => {
+        opt = opt || {};
+        const path = g.prefix ? g.prefix + "." + k : k;
+        const id = "f_" + path.replace(/\./g, "_");
+        const val = getPath(state.profile, path);
+        const lab = document.createElement("label"); lab.htmlFor = id; lab.textContent = label;
+        let inp;
+        if (type === "select") {
+          inp = document.createElement("select");
+          opt.options.forEach(([v, l]) => { const o = document.createElement("option"); o.value = v; o.textContent = l; inp.appendChild(o); });
+          inp.value = val;
+        } else {
+          inp = document.createElement("input");
+          inp.type = type === "bool" ? "checkbox" : type;
+          if (type === "bool") inp.checked = !!val; else inp.value = val == null ? "" : val;
+          if (opt.step) inp.step = opt.step;
+          if (opt.min != null) inp.min = opt.min;
+        }
+        inp.id = id;
+        inp.addEventListener("change", () => {
+          let v = type === "bool" ? inp.checked : type === "number" ? parseFloat(inp.value) : inp.value;
+          if (type === "number" && isNaN(v)) v = 0;
+          setPath(state.profile, path, v);
+          saveStore();
+          Object.keys(state.pending).forEach((key) => state.pending[key] && reclassify(key));
+          renderSections();
+        });
+        grid.append(lab, inp);
+        if (opt.desc) { const d = document.createElement("div"); d.className = "fdesc"; d.textContent = opt.desc; grid.appendChild(d); }
+      });
+      det.appendChild(grid);
+      fs.appendChild(det);
+      form.appendChild(fs);
+    });
+    form.appendChild(renderSectionEditor());
+  }
+
+  function renderSectionEditor() {
+    const fs = document.createElement("fieldset");
+    const det = document.createElement("details");
+    det.innerHTML = "<summary>Daftar bagian artikel</summary>";
+    const box = document.createElement("div");
+    box.className = "secedit";
+    const list = state.profile.sections;
+    list.forEach((s, i) => {
+      const el = document.createElement("div");
+      el.className = "secitem";
+      el.innerHTML = `
+        <span class="lab">Judul di dokumen</span><input type="text" data-f="title" value="${esc(s.title)}">
+        <span class="lab">Nama lain (pisahkan koma)</span><input type="text" data-f="aliases" value="${esc((s.aliases || []).join(", "))}">
+        <span class="lab">Sub-heading tingkat 2 khusus (mis. Results, Discussion)</span><input type="text" data-f="majors" value="${esc((s.majorSubheadings || []).join(", "))}">
+        <div class="tools"><label><input type="checkbox" data-f="refs" ${s.kind === "references" ? "checked" : ""}> Bagian referensi</label>
+          <span><button type="button" class="icon-btn" data-a="up" title="Naik">↑</button> <button type="button" class="icon-btn" data-a="down" title="Turun">↓</button> <button type="button" class="icon-btn" data-a="del" title="Hapus">✕</button></span></div>`;
+      el.querySelectorAll("input").forEach((inp) => inp.addEventListener("change", () => {
+        const f = inp.dataset.f;
+        if (f === "title") s.title = inp.value.trim() || s.title;
+        if (f === "aliases") s.aliases = inp.value.split(",").map((x) => x.trim()).filter(Boolean);
+        if (f === "majors") s.majorSubheadings = inp.value.split(",").map((x) => x.trim()).filter(Boolean);
+        if (f === "refs") { if (inp.checked) s.kind = "references"; else delete s.kind; }
+        saveStore(); renderSections();
+      }));
+      el.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+        const a = b.dataset.a;
+        if (a === "del") { ask(`Hapus bagian ${s.title}?`).then((ok) => { if (!ok) return; list.splice(i, 1); saveStore(); renderTemplate(); renderSections(); }); return; }
+        if (a === "up" && i > 0) [list[i - 1], list[i]] = [list[i], list[i - 1]];
+        if (a === "down" && i < list.length - 1) [list[i + 1], list[i]] = [list[i], list[i + 1]];
+        saveStore(); renderTemplate(); renderSections();
+        $("#templateForm details:last-of-type").open = true;
+      }));
+      box.appendChild(el);
+    });
+    const add = document.createElement("button");
+    add.type = "button"; add.className = "btn small"; add.textContent = "+ Tambah bagian";
+    add.addEventListener("click", () => {
+      const key = "s" + Date.now().toString(36);
+      list.splice(Math.max(0, list.findIndex((x) => x.kind === "references")), 0, { key, title: "NEW SECTION", aliases: [] });
+      saveStore(); renderTemplate(); renderSections();
+      $("#templateForm details:last-of-type").open = true;
+    });
+    box.appendChild(add);
+    det.appendChild(box); fs.appendChild(det);
+    return fs;
+  }
+
+  // Dialog sendiri — window.confirm/prompt diblokir di Office
+  function ask(title, defVal) {
+    return new Promise((resolve) => {
+      const d = $("#askDialog"), inp = $("#askInput");
+      $("#askTitle").textContent = title;
+      inp.classList.toggle("hidden", defVal == null);
+      inp.value = defVal == null ? "" : defVal;
+      const done = (v) => { d.close(); $("#askOk").onclick = $("#askCancel").onclick = null; resolve(v); };
+      $("#askOk").onclick = () => done(defVal == null ? true : inp.value.trim());
+      $("#askCancel").onclick = () => done(defVal == null ? false : null);
+      d.showModal();
+      if (defVal != null) inp.focus();
+    });
+  }
+
+  function initProfiles() {
+    $("#profileSelect").addEventListener("change", (e) => {
+      state.store.active = e.target.value;
+      state.profile = E.mergeProfile(state.store.profiles[state.store.active]);
+      saveStore(); renderTemplate(); state.pending = {}; renderSections(); refreshScan().then(renderSections);
+    });
+    $("#profDup").addEventListener("click", () => {
+      let n = state.store.active + " (salinan)", k = 2;
+      while (state.store.profiles[n]) n = state.store.active + " (salinan " + k++ + ")";
+      const p = E.clone(state.profile); p.name = n;
+      state.store.profiles[n] = p; state.store.active = n; state.profile = p;
+      saveStore(); renderTemplate(); toast("Profil diduplikat: " + n);
+    });
+    $("#profRename").addEventListener("click", async () => {
+      const cur = state.store.active;
+      const n = await ask("Nama profil baru:", cur);
+      if (!n || n === cur) return;
+      if (state.store.profiles[n]) { toast("Nama sudah dipakai.", "err"); return; }
+      state.store.profiles[n] = state.profile; delete state.store.profiles[cur];
+      state.profile.name = n; state.store.active = n; saveStore(); renderTemplate();
+    });
+    $("#profDelete").addEventListener("click", async () => {
+      if (Object.keys(state.store.profiles).length < 2) { toast("Minimal harus ada satu profil."); return; }
+      if (!(await ask("Hapus profil " + state.store.active + "?"))) return;
+      delete state.store.profiles[state.store.active];
+      state.store.active = Object.keys(state.store.profiles)[0];
+      state.profile = E.mergeProfile(state.store.profiles[state.store.active]);
+      saveStore(); renderTemplate(); renderSections();
+    });
+    $("#profReset").addEventListener("click", async () => {
+      if (!(await ask("Kembalikan profil ini ke pengaturan default AIEDS?"))) return;
+      const keep = state.store.active;
+      state.profile = E.clone(E.DEFAULT_PROFILE); state.profile.name = keep;
+      saveStore(); renderTemplate(); renderSections(); toast("Profil dikembalikan ke default.");
+    });
+    const dlg = $("#jsonDialog");
+    $("#profExport").addEventListener("click", () => {
+      $("#jsonTitle").textContent = "Ekspor profil — salin & simpan teks ini";
+      $("#jsonText").value = JSON.stringify(state.profile, null, 2);
+      $("#jsonApply").classList.add("hidden");
+      dlg.showModal();
+    });
+    $("#profImport").addEventListener("click", () => {
+      $("#jsonTitle").textContent = "Impor profil — tempel JSON profil di bawah";
+      $("#jsonText").value = "";
+      $("#jsonApply").classList.remove("hidden");
+      dlg.showModal();
+    });
+    $("#jsonCopy").addEventListener("click", () => { $("#jsonText").select(); try { document.execCommand("copy"); toast("Disalin."); } catch (e) { /* */ } });
+    $("#jsonClose").addEventListener("click", () => dlg.close());
+    $("#jsonApply").addEventListener("click", () => {
+      try {
+        const p = E.mergeProfile(JSON.parse($("#jsonText").value));
+        let n = p.name || "Profil impor", k = 2;
+        while (state.store.profiles[n]) n = (p.name || "Profil impor") + " " + k++;
+        p.name = n;
+        state.store.profiles[n] = p; state.store.active = n; state.profile = p;
+        saveStore(); renderTemplate(); renderSections(); dlg.close(); toast("Profil diimpor: " + n, "ok");
+      } catch (e) { toast("JSON tidak valid: " + e.message, "err"); }
+    });
+  }
+
+  /* ---------------- start ---------------- */
+  function boot(inWord) {
+    state.inWord = inWord;
+    loadStore();
+    $("#profileLabel").textContent = state.store.active;
+    $("#notInWord").classList.toggle("hidden", inWord);
+    state.open[state.profile.sections[0] && state.profile.sections[0].key] = true;
+    initTabs(); initMode(); initProfiles();
+    renderTemplate(); renderSections(); renderCounts(null);
+    $("#insertAll").addEventListener("click", () => doInsert(state.profile.sections.map((s) => s.key)));
+    $("#undoLast").addEventListener("click", doUndo);
+    $("#recount").addEventListener("click", recount);
+    if (inWord) refreshScan().then(renderSections);
+  }
+
+  if (typeof Office !== "undefined" && Office.onReady) {
+    let booted = false;
+    Office.onReady((info) => { if (booted) return; booted = true; boot(info && info.host === Office.HostType.Word); });
+    // di luar Office, onReady kadang tidak terpanggil
+    setTimeout(() => { if (!booted) { booted = true; boot(false); } }, 2500);
+  } else {
+    document.addEventListener("DOMContentLoaded", () => boot(false));
+  }
+
+  // untuk pengujian
+  window.__tplState = state;
+})();

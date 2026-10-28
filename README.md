@@ -1,0 +1,80 @@
+# Template Paste — Add-in Word
+
+Tempel isi artikel per bagian (Introduction, Method, Results and Discussion, Conclusion, References, …), lalu add-in menyesuaikan formatnya dengan template jurnal secara otomatis:
+
+- **Font, ukuran, perataan, spasi sebelum/sesudah, spasi baris** untuk tiap jenis paragraf
+- **Deteksi sub-heading otomatis** (kalimat pendek tanpa titik, teks bold, heading dari Google Docs/ChatGPT, heading bernomor seperti `2.1`) → dibuat bold sesuai template. Di Results and Discussion, *Results* dan *Discussion* jadi tingkat 2, sub-judul di bawahnya tingkat 3
+- **Referensi**: hanging indent 1,27 cm, italic otomatis gaya APA (nama jurnal + volume, atau judul buku) bila tempelan tidak membawa italic, DOI jadi hyperlink, baris terputus dari PDF disambung
+- **Caption** (`Table 1.` / `Figure 1.` → label bold, judul normal), **Note.**, dan **tabel** yang ditempel (garis gaya APA, font 10 pt)
+- **Menambah, bukan mengganti**: isi masuk di bawah konten yang sudah ada pada bagian itu. Bila judul bagian belum ada, judulnya dibuat di urutan yang benar
+- **Rapikan isi yang ada**: terapkan format template ke paragraf yang sudah terlanjur ditempel manual (italic tidak diubah)
+- **Hitung kata** per bagian dan total terhadap batas jurnal, plus abstrak
+- **Profil template**: semua angka bisa diubah, dan profil bisa diduplikat untuk jurnal lain (ekspor/impor JSON)
+
+Profil bawaan **AIEDS** diambil dari naskah copyedit Anda: Cambria; judul bagian 12 pt bold KAPITAL rata tengah dengan spasi sesudah 6 pt; sub-heading 11 pt bold; isi 11 pt justify dengan spasi 3/3 pt dan spasi baris tunggal; referensi 11 pt dengan hanging 1,27 cm dan spasi sesudah 6 pt; tabel 10 pt. **Batas kata (8.000 isi / 250 abstrak) masih perkiraan.** Sesuaikan di tab *Template → Umum & batas kata* menurut ketentuan jurnal.
+
+---
+
+## 1. Hosting (sekali saja, gratis lewat GitHub Pages)
+
+Add-in Word harus dibuka dari alamat **https**. Cara termudah:
+
+1. Buat repositori baru di GitHub, misalnya `template-paste` (boleh *Public*).
+2. Unggah **seluruh isi folder ini** (`manifest.xml`, `README.html`, folder `src/`, `assets/`) ke repositori itu.
+3. Buka **Settings → Pages**, lalu pada *Source* pilih **Deploy from a branch**, branch `main`, folder `/ (root)`, dan klik **Save**.
+4. Tunggu 1–2 menit. Alamat situs Anda akan seperti `https://NAMAANDA.github.io/template-paste`.
+5. Buka `manifest.xml` di Notepad, lalu gunakan **Find & Replace**: ganti semua `https://YOUR-SITE` dengan alamat tadi (tanpa `/` di akhir). Simpan file itu di komputer Anda. (File di GitHub tidak perlu diubah.)
+
+Cek: buka `https://NAMAANDA.github.io/template-paste/src/taskpane.html` di browser. Panel akan tampil dengan tulisan "Mode pratinjau".
+
+## 2. Memasang di Word
+
+### Word di Windows (Microsoft 365 / 2019 / 2021)
+1. Buat folder, misalnya `C:\AddinWord`, lalu salin `manifest.xml` ke folder itu.
+2. Klik kanan folder → **Properties → Sharing → Share…** → tambahkan diri Anda → **Share**. Catat alamat jaringannya, misalnya `\\NAMA-PC\AddinWord`.
+3. Di Word: **File → Options → Trust Center → Trust Center Settings → Trusted Add-in Catalogs**. Isi *Catalog Url* dengan `\\NAMA-PC\AddinWord`, klik **Add catalog**, centang **Show in Menu**, klik OK, lalu tutup dan buka Word lagi.
+4. **Home → Add-ins** (atau **Insert → My Add-ins**) → tab **SHARED FOLDER** → **Template Paste** → **Add**.
+
+### Word di Mac
+1. Buka Finder → **Go → Go to Folder…** → `~/Library/Containers/com.microsoft.Word/Data/Documents/wef` (buat folder `wef` bila belum ada).
+2. Salin `manifest.xml` ke folder itu, lalu buka ulang Word.
+3. **Insert → Add-ins → My Add-ins** → pilih **Template Paste**.
+
+### Word di web (office.com)
+**Insert → Add-ins → My Add-ins → Upload My Add-in** → pilih `manifest.xml`.
+
+Setelah terpasang, tombol **Template Paste** muncul di tab **Home**.
+
+---
+
+## 3. Cara pakai
+
+1. Buka naskah template jurnal (yang sudah ada judul INTRODUCTION, METHOD, dst., atau masih kosong pun bisa).
+2. Klik **Template Paste** di tab Home.
+3. Di tab **Tempel**, buka kartu bagian (misalnya *INTRODUCTION*), klik kotak bergaris putus-putus, lalu tekan **Ctrl+V**. Anda bisa menempel berkali-kali untuk menambah isi.
+4. Periksa pratinjau. Tiap baris punya menu jenis (*Isi / Heading 2 / Heading 3 / Caption / Catatan / Referensi / Lewati*). Ubah bila deteksi keliru.
+5. Klik **Sisipkan ke dokumen**, atau **Sisipkan semua bagian** di bawah untuk memasukkan semua sekaligus.
+6. Bila hasilnya tidak sesuai, klik **Hapus sisipan terakhir** (atau Ctrl+Z).
+
+**Mode "Posisi kursor"**: isi disisipkan di posisi kursor, bukan di akhir bagian.
+
+**Gambar** di tempelan diabaikan. Sisipkan gambar langsung di Word, lalu tempel caption-nya lewat add-in.
+
+**Tips akurasi deteksi**: menyalin dari Word, Google Docs, atau ChatGPT paling akurat karena format bold/italic ikut terbawa. Untuk teks polos (Notepad/PDF), sub-heading dikenali dari ciri "pendek, diawali huruf kapital, tanpa titik di akhir".
+
+## 4. Template untuk jurnal lain
+
+Tab **Template** → **Duplikat**, beri nama (misalnya "Jurnal X"), lalu ubah ukuran, spasi, hanging, batas kata, dan **Daftar bagian artikel** (judul bagian beserta nama lainnya, misalnya *Pendahuluan*, *Metode Penelitian*). Profil tersimpan di komputer itu. Gunakan **Ekspor** untuk menyalin profil ke komputer lain.
+
+## 5. Struktur file
+
+```
+manifest.xml          definisi add-in (ganti YOUR-SITE)
+src/taskpane.html     panel
+src/taskpane.js       antarmuka
+src/engine.js         deteksi heading/referensi & aturan format (tanpa Office.js)
+src/word-ops.js       operasi ke dokumen Word (Office.js, WordApi 1.3+)
+assets/               ikon
+```
+
+Kebutuhan: Word 2016 ke atas / Microsoft 365 / Word Mac / Word web. Fitur "Hapus sisipan terakhir" butuh WordApi 1.4 (Microsoft 365 / Word 2021).

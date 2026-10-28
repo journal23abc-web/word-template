@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+  <title>Template Paste</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <link rel="stylesheet" href="taskpane.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 11h7M9 14h7M9 17h4" stroke="currentColor" stroke-width="1.6"/></svg>
+      <div>
+        <div class="brand-name">Template Paste</div>
+        <div class="brand-sub" id="profileLabel">—</div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" class="tab active" data-tab="paste">Tempel</button>
+    <button role="tab" class="tab" data-tab="words">Hitung kata</button>
+    <button role="tab" class="tab" data-tab="template">Template</button>
+  </nav>
+
+  <div id="notInWord" class="banner hidden">Mode pratinjau di browser — buka lewat Word untuk menyisipkan ke dokumen.</div>
+
+  <!-- ============ TEMPEL ============ -->
+  <main id="tab-paste" class="panel">
+    <div class="modebar">
+      <span class="lbl">Sisipkan di</span>
+      <div class="seg" id="modeSeg">
+        <button data-mode="section" class="on">Akhir bagian</button>
+        <button data-mode="cursor">Posisi kursor</button>
+      </div>
+    </div>
+    <p class="hint" id="modeHint">Isi ditambahkan di bawah konten yang sudah ada pada bagian tersebut. Judul bagian dibuat otomatis bila belum ada.</p>
+
+    <div id="sections"></div>
+
+    <div class="footer-actions">
+      <button class="btn primary" id="insertAll">Sisipkan semua bagian</button>
+      <button class="btn ghost" id="undoLast" title="Hapus konten yang terakhir disisipkan add-in ini">Hapus sisipan terakhir</button>
+    </div>
+  </main>
+
+  <!-- ============ HITUNG KATA ============ -->
+  <main id="tab-words" class="panel hidden">
+    <div class="row-between">
+      <p class="hint m0">Dihitung dari dokumen yang sedang terbuka.</p>
+      <button class="btn small" id="recount">Hitung ulang</button>
+    </div>
+    <div id="wordTotals"></div>
+    <div id="wordTable"></div>
+  </main>
+
+  <!-- ============ TEMPLATE ============ -->
+  <main id="tab-template" class="panel hidden">
+    <div class="profilebar">
+      <select id="profileSelect" aria-label="Profil template"></select>
+      <div class="btnrow">
+        <button class="btn small" id="profDup">Duplikat</button>
+        <button class="btn small" id="profRename">Ganti nama</button>
+        <button class="btn small danger" id="profDelete">Hapus</button>
+      </div>
+      <div class="btnrow">
+        <button class="btn small" id="profExport">Ekspor</button>
+        <button class="btn small" id="profImport">Impor</button>
+        <button class="btn small" id="profReset">Reset ke default</button>
+      </div>
+      <p class="hint">Perubahan tersimpan otomatis. Buat satu profil untuk tiap jurnal.</p>
+    </div>
+    <form id="templateForm" autocomplete="off"></form>
+  </main>
+
+  <dialog id="jsonDialog">
+    <h3 id="jsonTitle">Profil</h3>
+    <textarea id="jsonText" spellcheck="false"></textarea>
+    <div class="btnrow end">
+      <button class="btn small" id="jsonCopy">Salin</button>
+      <button class="btn small primary" id="jsonApply">Impor</button>
+      <button class="btn small ghost" id="jsonClose">Tutup</button>
+    </div>
+  </dialog>
+
+  <dialog id="askDialog">
+    <h3 id="askTitle"></h3>
+    <input id="askInput" type="text" class="askinput" />
+    <div class="btnrow end">
+      <button class="btn small ghost" id="askCancel">Batal</button>
+      <button class="btn small primary" id="askOk">OK</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="engine.js"></script>
+  <script src="word-ops.js"></script>
+  <script src="taskpane.js"></script>
+</body>
+</html>
