@@ -317,6 +317,60 @@
     }
   }
 
+  /**
+   * Hapus SEMUA isi bagian `key` (teks, sub-heading, tabel, gambar) — judul bagian tetap.
+   * Isi yang dihapus dikembalikan sebagai OOXML supaya bisa dipulihkan.
+   */
+  async function clearSection(key, profile) {
+    return Word.run(async (context) => {
+      const sec = profile.sections.find((s) => s.key === key);
+      const { paras, infos, heads } = await readStructure(context, profile);
+      const range = E.sectionRange(infos, heads, key);
+      if (!range) throw new Error(`Judul "${sec.title}" tidak ditemukan di dokumen.`);
+      const n = range.end - range.start - 1;
+      let words = 0;
+      for (let j = range.start + 1; j < range.end; j++) words += E.countWords(infos[j].text);
+      const onlyBlank = infos.slice(range.start + 1, range.end).every((p) => !(p.text || "").trim() && !p.inTable);
+      if (n <= 0 || (onlyBlank && n <= 1)) return { deleted: 0, words: 0, ooxml: null };
+
+      const first = paras[range.start + 1];
+      const hasNext = range.nextIndex >= 0;
+      const rng = hasNext
+        ? first.getRange("Start").expandTo(paras[range.end].getRange("Start"))
+        : first.getRange("Start").expandTo(paras[paras.length - 1].getRange("End"));
+      const ox = rng.getOoxml();
+      await context.sync();
+      rng.delete();
+      await context.sync();
+      if (hasNext && profile.layout.blankBeforeSection) {
+        // sisakan satu baris kosong sebelum judul bagian berikutnya
+        const st = await readStructure(context, profile);
+        const r2 = E.sectionRange(st.infos, st.heads, key);
+        if (r2 && r2.end - r2.start - 1 === 0) {
+          const blank = st.paras[r2.start].insertParagraph("", "After");
+          formatNewParagraph(blank, { type: "blank" }, profile);
+        }
+      }
+      paras[range.start].getRange("End").select("End");
+      await context.sync();
+      return { deleted: n, words, ooxml: ox.value };
+    });
+  }
+
+  /** Pulihkan isi yang dihapus clearSection (disisipkan tepat di bawah judul bagian). */
+  async function restoreSection(key, ooxml, profile) {
+    return Word.run(async (context) => {
+      const sec = profile.sections.find((s) => s.key === key);
+      const { paras, infos, heads } = await readStructure(context, profile);
+      const range = E.sectionRange(infos, heads, key);
+      if (!range) throw new Error(`Judul "${sec.title}" tidak ditemukan di dokumen.`);
+      const holder = paras[range.start].insertParagraph("", "After");
+      holder.insertOoxml(ooxml, "Replace");
+      await context.sync();
+      return true;
+    });
+  }
+
   async function countWords(profile) {
     return Word.run(async (context) => {
       const { infos, heads } = await readStructure(context, profile);
@@ -338,5 +392,5 @@
     });
   }
 
-  root.WordOps = { scan, insertSection, reformatSection, countWords, undoLast, _internal: { insertItems, formatNewParagraph, setStyle } };
+  root.WordOps = { scan, insertSection, reformatSection, clearSection, restoreSection, countWords, undoLast, _internal: { insertItems, formatNewParagraph, setStyle } };
 })(typeof self !== "undefined" ? self : this);

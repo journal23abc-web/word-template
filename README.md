@@ -7,6 +7,7 @@ Tempel isi artikel per bagian (Introduction, Method, Results and Discussion, Con
 - **Referensi**: hanging indent 1,27 cm, italic otomatis gaya APA (nama jurnal + volume, atau judul buku) bila tempelan tidak membawa italic, DOI jadi hyperlink, baris terputus dari PDF disambung
 - **Caption** (`Table 1.` / `Figure 1.` → label bold, judul normal), **Note.**, dan **tabel** yang ditempel (garis gaya APA, font 10 pt)
 - **Menambah, bukan mengganti**: isi masuk di bawah konten yang sudah ada pada bagian itu. Bila judul bagian belum ada, judulnya dibuat di urutan yang benar
+- **Hapus isi bagian**: kosongkan seluruh isi satu bagian di dokumen (atau semua bagian sekaligus) dengan judul bagian tetap ada, misalnya untuk mengganti Introduction dengan versi baru. Ada konfirmasi dan tombol **Kembalikan isi yang dihapus** (selama panel masih terbuka), dan Ctrl+Z tetap bisa dipakai
 - **Rapikan isi yang ada**: terapkan format template ke paragraf yang sudah terlanjur ditempel manual (italic tidak diubah)
 - **Kutipan langsung** (mis. kutipan wawancara “…” Guru, S1) dikenali dan dibuat menjorok + italic
 - **Hitung kata** per bagian dan total terhadap batas jurnal (aturan bisa diatur per jurnal), plus abstrak
@@ -69,6 +70,7 @@ Setelah terpasang, tombol **Template Paste** muncul di tab **Home**.
 4. Periksa pratinjau. Tiap baris punya menu jenis (*Isi / Heading 2 / Heading 3 / Kutipan / Caption / Catatan / Referensi / Lewati*). Ubah bila deteksi keliru.
 5. Klik **Sisipkan ke dokumen**, atau **Sisipkan semua bagian** di bawah untuk memasukkan semua sekaligus.
 6. Bila hasilnya tidak sesuai, klik **Hapus sisipan terakhir** (atau Ctrl+Z).
+7. Untuk **mengganti** isi suatu bagian: klik **Hapus isi bagian ini di dokumen** di kartu bagian itu, lalu tempel isi barunya. Judul bagian tidak ikut terhapus. Perhatikan bahwa *semua* isi di antara judul itu dan judul bagian berikutnya ikut terhapus, termasuk tabel, gambar, dan section break.
 
 **Mode "Posisi kursor"**: isi disisipkan di posisi kursor, bukan di akhir bagian.
 

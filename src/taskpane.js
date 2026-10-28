@@ -13,6 +13,7 @@
     profile: null,
     mode: "section",
     pending: {}, // key -> {blocks:[], overrides:{}, items:[], images:0}
+    backup: {},  // key -> OOXML isi yang dihapus (hanya selama panel terbuka)
     found: {},
     open: {},
   };
@@ -168,7 +169,11 @@
           <div class="sec-actions">
             <button class="btn primary small act-insert" ${live.length ? "" : "disabled"}>Sisipkan ke dokumen</button>
             <button class="btn small act-reformat" title="Terapkan format template ke isi yang sudah ada di bagian ini">Rapikan isi yang ada</button>
-            <button class="btn small ghost act-clear" ${p.items.length ? "" : "disabled"}>Kosongkan</button>
+            <button class="btn small ghost act-clear" ${p.items.length ? "" : "disabled"} title="Kosongkan tempelan di panel ini (dokumen tidak berubah)">Kosongkan tempelan</button>
+          </div>
+          <div class="sec-actions danger-zone">
+            <button class="btn small danger act-wipe" ${state.inWord && !state.found[s.key] ? "disabled" : ""} title="Hapus semua isi bagian ini di dokumen; judul bagian tetap ada">Hapus isi bagian ini di dokumen</button>
+            ${state.backup[s.key] ? `<button class="btn small act-restore" title="Kembalikan isi yang terakhir dihapus">↶ Kembalikan isi yang dihapus</button>` : ""}
           </div>
         </div>`;
       host.appendChild(card);
@@ -182,6 +187,9 @@
       card.querySelector(".act-insert").addEventListener("click", () => doInsert([s.key]));
       card.querySelector(".act-reformat").addEventListener("click", () => doReformat(s.key));
       card.querySelector(".act-clear").addEventListener("click", () => { state.pending[s.key] = null; renderSections(); });
+      card.querySelector(".act-wipe").addEventListener("click", () => doWipe([s.key]));
+      const rb = card.querySelector(".act-restore");
+      if (rb) rb.addEventListener("click", () => doRestore(s.key));
     }
   }
 
@@ -270,6 +278,48 @@
     } finally { setBusy(false); }
   }
 
+  /** Hapus isi bagian di dokumen (judul tetap). */
+  async function doWipe(keys) {
+    if (!needWord()) return;
+    await refreshScan();
+    const targets = keys.filter((k) => state.found[k]);
+    if (!targets.length) { toast("Judul bagian tidak ditemukan di dokumen."); return; }
+    const words = targets.reduce((a, k) => {
+      const r = state.lastCount && state.lastCount.sections.find((x) => x.key === k);
+      return a + (r ? r.words : 0);
+    }, 0);
+    const names = targets.map((k) => sec(k).title).join(", ");
+    const msg = targets.length === 1
+      ? `Hapus SEMUA isi ${names} di dokumen (±${fmtN(words)} kata, termasuk sub-heading, tabel & gambar)? Judul bagian tetap ada.`
+      : `Hapus SEMUA isi ${targets.length} bagian (${names}) — ±${fmtN(words)} kata, termasuk tabel & gambar? Judul-judul bagian tetap ada.`;
+    if (!(await ask(msg, null, { ok: "Hapus", danger: true }))) return;
+    setBusy(true);
+    try {
+      let total = 0;
+      // dari bagian paling bawah ke atas
+      const order = state.profile.sections.map((x) => x.key).filter((k) => targets.includes(k)).reverse();
+      for (const k of order) {
+        const r = await WordOps.clearSection(k, state.profile);
+        if (r.ooxml) state.backup[k] = r.ooxml;
+        total += r.deleted;
+      }
+      await refreshScan();
+      renderSections();
+      toast(total ? `✓ Isi dihapus (${total} paragraf). Bisa dipulihkan dengan "Kembalikan" atau Ctrl+Z.` : "Bagian sudah kosong.", total ? "ok" : "", 6000);
+    } catch (e) { toast("Gagal menghapus: " + errMsg(e), "err"); } finally { setBusy(false); }
+  }
+
+  async function doRestore(key) {
+    if (!needWord() || !state.backup[key]) return;
+    setBusy(true);
+    try {
+      await WordOps.restoreSection(key, state.backup[key], state.profile);
+      delete state.backup[key];
+      await refreshScan(); renderSections();
+      toast("✓ Isi " + sec(key).title + " dikembalikan.", "ok");
+    } catch (e) { toast("Gagal mengembalikan: " + errMsg(e) + ". Coba Ctrl+Z.", "err"); } finally { setBusy(false); }
+  }
+
   async function doReformat(key) {
     if (!needWord()) return;
     setBusy(true);
@@ -289,7 +339,10 @@
   }
 
   function setBusy(b) {
-    document.querySelectorAll("button").forEach((x) => { if (b) { x.dataset.wasDisabled = x.disabled ? "1" : ""; x.disabled = true; } else x.disabled = x.dataset.wasDisabled === "1"; });
+    document.querySelectorAll("button").forEach((x) => {
+      if (b) { x.dataset.wasDisabled = x.disabled ? "1" : ""; x.disabled = true; }
+      else if (x.dataset.wasDisabled !== undefined) { x.disabled = x.dataset.wasDisabled === "1"; delete x.dataset.wasDisabled; }
+    });
     document.body.style.cursor = b ? "progress" : "";
   }
 
@@ -523,10 +576,13 @@
   }
 
   // Dialog sendiri — window.confirm/prompt diblokir di Office
-  function ask(title, defVal) {
+  function ask(title, defVal, opt) {
+    opt = opt || {};
     return new Promise((resolve) => {
       const d = $("#askDialog"), inp = $("#askInput");
       $("#askTitle").textContent = title;
+      $("#askOk").textContent = opt.ok || "OK";
+      $("#askOk").classList.toggle("danger-solid", !!opt.danger);
       inp.classList.toggle("hidden", defVal == null);
       inp.value = defVal == null ? "" : defVal;
       const done = (v) => { d.close(); $("#askOk").onclick = $("#askCancel").onclick = null; resolve(v); };
@@ -617,6 +673,7 @@
     renderTemplate(); renderSections(); renderLimits(); renderCounts(null);
     $("#insertAll").addEventListener("click", () => doInsert(state.profile.sections.map((s) => s.key)));
     $("#undoLast").addEventListener("click", doUndo);
+    $("#wipeAll").addEventListener("click", () => doWipe(state.profile.sections.map((x) => x.key)));
     $("#recount").addEventListener("click", recount);
     if (inWord) refreshScan().then(renderSections);
   }

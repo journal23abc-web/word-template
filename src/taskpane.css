@@ -145,3 +145,8 @@ dialog textarea { width: 100%; height: 260px; font-family: ui-monospace, Consola
 .limits .fgrid { padding-top: 2px; }
 .limits .subhead { grid-column: 1 / -1; font-size: 11.5px; color: var(--muted); margin-top: 4px; border-top: 1px solid #eef0f3; padding-top: 6px; }
 .prow.t-quote .txt { font-style: italic; padding-left: 10px; border-left: 2px solid var(--line); }
+.danger-zone { border-top: 1px dashed var(--line); padding-top: 8px; margin-top: 10px; }
+.btn.danger { border-color: #ecc9c6; }
+.btn.danger:hover { background: #fdf1f0; border-color: var(--bad); }
+.btn.primary.danger-solid { background: var(--bad); border-color: var(--bad); }
+#askTitle { font-weight: 600; font-size: 13.5px; line-height: 1.45; }
