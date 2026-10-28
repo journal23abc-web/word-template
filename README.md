@@ -8,10 +8,24 @@ Tempel isi artikel per bagian (Introduction, Method, Results and Discussion, Con
 - **Caption** (`Table 1.` / `Figure 1.` → label bold, judul normal), **Note.**, dan **tabel** yang ditempel (garis gaya APA, font 10 pt)
 - **Menambah, bukan mengganti**: isi masuk di bawah konten yang sudah ada pada bagian itu. Bila judul bagian belum ada, judulnya dibuat di urutan yang benar
 - **Rapikan isi yang ada**: terapkan format template ke paragraf yang sudah terlanjur ditempel manual (italic tidak diubah)
-- **Hitung kata** per bagian dan total terhadap batas jurnal, plus abstrak
+- **Kutipan langsung** (mis. kutipan wawancara “…” Guru, S1) dikenali dan dibuat menjorok + italic
+- **Hitung kata** per bagian dan total terhadap batas jurnal (aturan bisa diatur per jurnal), plus abstrak
 - **Profil template**: semua angka bisa diubah, dan profil bisa diduplikat untuk jurnal lain (ekspor/impor JSON)
 
-Profil bawaan **AIEDS** diambil dari naskah copyedit Anda: Cambria; judul bagian 12 pt bold KAPITAL rata tengah dengan spasi sesudah 6 pt; sub-heading 11 pt bold; isi 11 pt justify dengan spasi 3/3 pt dan spasi baris tunggal; referensi 11 pt dengan hanging 1,27 cm dan spasi sesudah 6 pt; tabel 10 pt. **Batas kata (8.000 isi / 250 abstrak) masih perkiraan.** Sesuaikan di tab *Template → Umum & batas kata* menurut ketentuan jurnal.
+**Template bawaan** (pilih di menu **Jurnal** di bagian atas tab Tempel):
+
+| | AIEDS | JEPSI |
+|---|---|---|
+| Font | Cambria | Cambria |
+| Judul bagian | 12 pt bold KAPITAL, tengah, sesudah 6 pt | 11 pt bold KAPITAL, tengah, sesudah 6 pt |
+| Sub-heading | 11 pt bold, 3/3 pt | 11 pt bold, 0/6 pt |
+| Isi | 11 pt justify, 3/3 pt, spasi tunggal | 11 pt justify, 0/6 pt, spasi tunggal |
+| Caption / Note. | label bold / Note. tegak | label bold / *Note.* italic |
+| Kutipan langsung | menjorok 1,27 cm, italic | menjorok 1,27 cm, italic |
+| Tabel | 10 pt, garis APA, isi rata tengah | 10 pt, garis APA, isi rata kiri |
+| Referensi | 11 pt, hanging 1,27 cm, sesudah 6 pt | 11 pt, hanging 1,27 cm, sesudah 6 pt |
+
+**Batas kata diatur sendiri per jurnal** di tab **Hitung kata → Aturan hitung kata**: maksimal/minimal kata isi, maksimal kata abstrak, bagian mana yang ikut dihitung (mis. referensi, Author Contribution, AI Disclosure), dan teks tabel. 0 = tidak dibatasi.
 
 ---
 
@@ -50,9 +64,9 @@ Setelah terpasang, tombol **Template Paste** muncul di tab **Home**.
 ## 3. Cara pakai
 
 1. Buka naskah template jurnal (yang sudah ada judul INTRODUCTION, METHOD, dst., atau masih kosong pun bisa).
-2. Klik **Template Paste** di tab Home.
+2. Klik **Template Paste** di tab Home, lalu pilih jurnalnya di menu **Jurnal**.
 3. Di tab **Tempel**, buka kartu bagian (misalnya *INTRODUCTION*), klik kotak bergaris putus-putus, lalu tekan **Ctrl+V**. Anda bisa menempel berkali-kali untuk menambah isi.
-4. Periksa pratinjau. Tiap baris punya menu jenis (*Isi / Heading 2 / Heading 3 / Caption / Catatan / Referensi / Lewati*). Ubah bila deteksi keliru.
+4. Periksa pratinjau. Tiap baris punya menu jenis (*Isi / Heading 2 / Heading 3 / Kutipan / Caption / Catatan / Referensi / Lewati*). Ubah bila deteksi keliru.
 5. Klik **Sisipkan ke dokumen**, atau **Sisipkan semua bagian** di bawah untuk memasukkan semua sekaligus.
 6. Bila hasilnya tidak sesuai, klik **Hapus sisipan terakhir** (atau Ctrl+Z).
 
@@ -64,7 +78,7 @@ Setelah terpasang, tombol **Template Paste** muncul di tab **Home**.
 
 ## 4. Template untuk jurnal lain
 
-Tab **Template** → **Duplikat**, beri nama (misalnya "Jurnal X"), lalu ubah ukuran, spasi, hanging, batas kata, dan **Daftar bagian artikel** (judul bagian beserta nama lainnya, misalnya *Pendahuluan*, *Metode Penelitian*). Profil tersimpan di komputer itu. Gunakan **Ekspor** untuk menyalin profil ke komputer lain.
+Tab **Template** → **Duplikat**, beri nama (misalnya "Jurnal X"), lalu ubah ukuran, spasi, hanging, kutipan, dan **Daftar bagian artikel** (judul bagian beserta nama lainnya, misalnya *Pendahuluan*, *Metode Penelitian*). Profil tersimpan di komputer itu. Gunakan **Ekspor** untuk menyalin profil ke komputer lain.
 
 ## 5. Struktur file
 

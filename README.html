@@ -1,4 +1,4 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Template Paste</title><style>body{font-family:Segoe UI,system-ui,sans-serif;max-width:760px;margin:24px auto;padding:0 16px;line-height:1.55;color:#1d232b}code,pre{background:#f2f4f7;border-radius:4px}pre{padding:10px;overflow:auto}code{padding:1px 4px}</style></head><body><h1>Template Paste — Add-in Word</h1>
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Template Paste</title><style>body{font-family:Segoe UI,system-ui,sans-serif;max-width:760px;margin:24px auto;padding:0 16px;line-height:1.55;color:#1d232b}code,pre{background:#f2f4f7;border-radius:4px}pre{padding:10px;overflow:auto}code{padding:1px 4px}table{border-collapse:collapse;font-size:14px}td,th{border:1px solid #dde1e6;padding:4px 8px;text-align:left}</style></head><body><h1>Template Paste — Add-in Word</h1>
 <p>Tempel isi artikel per bagian (Introduction, Method, Results and Discussion, Conclusion, References, …), lalu add-in menyesuaikan formatnya dengan template jurnal secara otomatis:</p>
 <ul>
 <li><strong>Font, ukuran, perataan, spasi sebelum/sesudah, spasi baris</strong> untuk tiap jenis paragraf</li>
@@ -7,10 +7,63 @@
 <li><strong>Caption</strong> (<code>Table 1.</code> / <code>Figure 1.</code> → label bold, judul normal), <strong>Note.</strong>, dan <strong>tabel</strong> yang ditempel (garis gaya APA, font 10 pt)</li>
 <li><strong>Menambah, bukan mengganti</strong>: isi masuk di bawah konten yang sudah ada pada bagian itu. Bila judul bagian belum ada, judulnya dibuat di urutan yang benar</li>
 <li><strong>Rapikan isi yang ada</strong>: terapkan format template ke paragraf yang sudah terlanjur ditempel manual (italic tidak diubah)</li>
-<li><strong>Hitung kata</strong> per bagian dan total terhadap batas jurnal, plus abstrak</li>
+<li><strong>Kutipan langsung</strong> (mis. kutipan wawancara “…” Guru, S1) dikenali dan dibuat menjorok + italic</li>
+<li><strong>Hitung kata</strong> per bagian dan total terhadap batas jurnal (aturan bisa diatur per jurnal), plus abstrak</li>
 <li><strong>Profil template</strong>: semua angka bisa diubah, dan profil bisa diduplikat untuk jurnal lain (ekspor/impor JSON)</li>
 </ul>
-<p>Profil bawaan <strong>AIEDS</strong> diambil dari naskah copyedit Anda: Cambria; judul bagian 12 pt bold KAPITAL rata tengah dengan spasi sesudah 6 pt; sub-heading 11 pt bold; isi 11 pt justify dengan spasi 3/3 pt dan spasi baris tunggal; referensi 11 pt dengan hanging 1,27 cm dan spasi sesudah 6 pt; tabel 10 pt. <strong>Batas kata (8.000 isi / 250 abstrak) masih perkiraan.</strong> Sesuaikan di tab <em>Template → Umum &amp; batas kata</em> menurut ketentuan jurnal.</p>
+<p><strong>Template bawaan</strong> (pilih di menu <strong>Jurnal</strong> di bagian atas tab Tempel):</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>AIEDS</th>
+<th>JEPSI</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Font</td>
+<td>Cambria</td>
+<td>Cambria</td>
+</tr>
+<tr>
+<td>Judul bagian</td>
+<td>12 pt bold KAPITAL, tengah, sesudah 6 pt</td>
+<td>11 pt bold KAPITAL, tengah, sesudah 6 pt</td>
+</tr>
+<tr>
+<td>Sub-heading</td>
+<td>11 pt bold, 3/3 pt</td>
+<td>11 pt bold, 0/6 pt</td>
+</tr>
+<tr>
+<td>Isi</td>
+<td>11 pt justify, 3/3 pt, spasi tunggal</td>
+<td>11 pt justify, 0/6 pt, spasi tunggal</td>
+</tr>
+<tr>
+<td>Caption / Note.</td>
+<td>label bold / Note. tegak</td>
+<td>label bold / <em>Note.</em> italic</td>
+</tr>
+<tr>
+<td>Kutipan langsung</td>
+<td>menjorok 1,27 cm, italic</td>
+<td>menjorok 1,27 cm, italic</td>
+</tr>
+<tr>
+<td>Tabel</td>
+<td>10 pt, garis APA, isi rata tengah</td>
+<td>10 pt, garis APA, isi rata kiri</td>
+</tr>
+<tr>
+<td>Referensi</td>
+<td>11 pt, hanging 1,27 cm, sesudah 6 pt</td>
+<td>11 pt, hanging 1,27 cm, sesudah 6 pt</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Batas kata diatur sendiri per jurnal</strong> di tab <strong>Hitung kata → Aturan hitung kata</strong>: maksimal/minimal kata isi, maksimal kata abstrak, bagian mana yang ikut dihitung (mis. referensi, Author Contribution, AI Disclosure), dan teks tabel. 0 = tidak dibatasi.</p>
 <hr />
 <h2>1. Hosting (sekali saja, gratis lewat GitHub Pages)</h2>
 <p>Add-in Word harus dibuka dari alamat <strong>https</strong>. Cara termudah:</p>
@@ -43,9 +96,9 @@
 <h2>3. Cara pakai</h2>
 <ol>
 <li>Buka naskah template jurnal (yang sudah ada judul INTRODUCTION, METHOD, dst., atau masih kosong pun bisa).</li>
-<li>Klik <strong>Template Paste</strong> di tab Home.</li>
+<li>Klik <strong>Template Paste</strong> di tab Home, lalu pilih jurnalnya di menu <strong>Jurnal</strong>.</li>
 <li>Di tab <strong>Tempel</strong>, buka kartu bagian (misalnya <em>INTRODUCTION</em>), klik kotak bergaris putus-putus, lalu tekan <strong>Ctrl+V</strong>. Anda bisa menempel berkali-kali untuk menambah isi.</li>
-<li>Periksa pratinjau. Tiap baris punya menu jenis (<em>Isi / Heading 2 / Heading 3 / Caption / Catatan / Referensi / Lewati</em>). Ubah bila deteksi keliru.</li>
+<li>Periksa pratinjau. Tiap baris punya menu jenis (<em>Isi / Heading 2 / Heading 3 / Kutipan / Caption / Catatan / Referensi / Lewati</em>). Ubah bila deteksi keliru.</li>
 <li>Klik <strong>Sisipkan ke dokumen</strong>, atau <strong>Sisipkan semua bagian</strong> di bawah untuk memasukkan semua sekaligus.</li>
 <li>Bila hasilnya tidak sesuai, klik <strong>Hapus sisipan terakhir</strong> (atau Ctrl+Z).</li>
 </ol>
@@ -53,7 +106,7 @@
 <p><strong>Gambar</strong> di tempelan diabaikan. Sisipkan gambar langsung di Word, lalu tempel caption-nya lewat add-in.</p>
 <p><strong>Tips akurasi deteksi</strong>: menyalin dari Word, Google Docs, atau ChatGPT paling akurat karena format bold/italic ikut terbawa. Untuk teks polos (Notepad/PDF), sub-heading dikenali dari ciri "pendek, diawali huruf kapital, tanpa titik di akhir".</p>
 <h2>4. Template untuk jurnal lain</h2>
-<p>Tab <strong>Template</strong> → <strong>Duplikat</strong>, beri nama (misalnya "Jurnal X"), lalu ubah ukuran, spasi, hanging, batas kata, dan <strong>Daftar bagian artikel</strong> (judul bagian beserta nama lainnya, misalnya <em>Pendahuluan</em>, <em>Metode Penelitian</em>). Profil tersimpan di komputer itu. Gunakan <strong>Ekspor</strong> untuk menyalin profil ke komputer lain.</p>
+<p>Tab <strong>Template</strong> → <strong>Duplikat</strong>, beri nama (misalnya "Jurnal X"), lalu ubah ukuran, spasi, hanging, kutipan, dan <strong>Daftar bagian artikel</strong> (judul bagian beserta nama lainnya, misalnya <em>Pendahuluan</em>, <em>Metode Penelitian</em>). Profil tersimpan di komputer itu. Gunakan <strong>Ekspor</strong> untuk menyalin profil ke komputer lain.</p>
 <h2>5. Struktur file</h2>
 <pre><code>manifest.xml          definisi add-in (ganti YOUR-SITE)
 src/taskpane.html     panel

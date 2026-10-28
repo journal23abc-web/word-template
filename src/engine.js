@@ -17,11 +17,14 @@
   /* ------------------------------------------------------------------ */
   const DEFAULT_PROFILE = {
     name: "AIEDS (Artificial Intelligence in Educational Decision Sciences)",
+    base: "aieds",
     font: "Cambria",
     color: "#000000",
     limits: {
-      bodyWords: 8000,        // batas kata isi artikel (Introduction s/d Conclusion)
-      abstractWords: 250,
+      bodyWords: 0,           // batas kata isi artikel; 0 = belum diatur (isi sesuai jurnal)
+      minBodyWords: 0,        // batas minimal (opsional)
+      abstractWords: 0,
+      excludeKeys: [],        // bagian yang tidak ikut dihitung, mis. ["contrib","ai"]
       countReferences: false, // referensi ikut dihitung?
       countTables: false,     // teks di dalam tabel ikut dihitung?
     },
@@ -35,7 +38,8 @@
     body:    { style: "Normal", size: 11, align: "Justified", firstIndentCm: 0, before: 3, after: 3, line: 1 },
     caption: { style: "Normal", size: 11, align: "Centered", labelBold: true, before: 3, after: 3, line: 1 },
     note:    { style: "Normal", size: 11, align: "Justified", labelItalic: false, before: 3, after: 4, line: 1 },
-    table:   { size: 10, headerBold: true, apaBorders: true, firstColLeft: true },
+    quote:   { style: "Normal", size: 11, align: "Justified", leftCm: 1.27, rightCm: 0, italic: true, before: 3, after: 3, line: 1 },
+    table:   { size: 10, headerBold: true, apaBorders: true, firstColLeft: true, cellAlign: "Centered" },
     references: {
       style: "Normal", size: 11, align: "Justified", hangingCm: 1.27, before: 0, after: 6, line: 1,
       sort: false, autoItalic: true, linkDoi: true, stripNumbering: true,
@@ -49,6 +53,7 @@
       keepSupSub: true,
       mergeBrokenLines: true,
       requireCapsSectionTitle: true,
+      detectQuotes: true,
     },
     sections: [
       { key: "intro",   title: "INTRODUCTION", aliases: ["Introduction", "Pendahuluan", "Background"] },
@@ -64,9 +69,31 @@
 
   const clone = (o) => JSON.parse(JSON.stringify(o));
 
+  /* Profil bawaan JEPSI — diturunkan dari naskah copyedit Banik & Roy (2026) */
+  const JEPSD_PROFILE = (function () {
+    const p = clone(DEFAULT_PROFILE);
+    p.name = "JEPSI (Journal of Education Psychology and Social Development)";
+    p.base = "jepsi";
+    const sp = { before: 0, after: 6, line: 1 };
+    Object.assign(p.sectionHeading, { size: 11 }, sp);
+    Object.assign(p.h2, sp); Object.assign(p.h3, sp);
+    Object.assign(p.body, sp);
+    Object.assign(p.caption, sp);
+    Object.assign(p.note, sp, { labelItalic: true });
+    Object.assign(p.quote, sp, { leftCm: 1.27, italic: true });
+    Object.assign(p.table, { cellAlign: "Left" });
+    Object.assign(p.references, sp, { hangingCm: 1.27 });
+    p.sections.find((s) => s.key === "intro").aliases.push("Introduction and Literature Review");
+    return p;
+  })();
+
+  /** Template bawaan (urutan = urutan di menu). */
+  const PRESETS = [DEFAULT_PROFILE, JEPSD_PROFILE];
+  const presetFor = (base) => PRESETS.find((x) => x.base === base) || DEFAULT_PROFILE;
+
   /** Gabungkan profil tersimpan dengan default (agar kunci baru tetap ada). */
   function mergeProfile(p) {
-    const out = clone(DEFAULT_PROFILE);
+    const out = clone(presetFor(p && p.base));
     if (!p) return out;
     for (const k of Object.keys(p)) {
       if (p[k] && typeof p[k] === "object" && !Array.isArray(p[k]) && out[k] && typeof out[k] === "object" && !Array.isArray(out[k])) {
@@ -198,7 +225,7 @@
     const flush = () => {
       if (cur && cur.runs.length) {
         const runs = normalizeRuns(cur.runs);
-        if (runs.length) blocks.push({ kind: "p", tag: cur.tag, cls: cur.cls, runs });
+        if (runs.length) blocks.push({ kind: "p", tag: cur.tag, cls: cur.cls, runs, html: true });
       }
       cur = null;
     };
@@ -243,7 +270,7 @@
       if (tag === "OL") olStack.push(0);
       if (isBlock) {
         flush();
-        let bt = /^H[1-6]$/.test(tag) ? tag.toLowerCase() : tag === "LI" ? "li" : "p";
+        let bt = /^H[1-6]$/.test(tag) ? tag.toLowerCase() : tag === "LI" ? "li" : tag === "BLOCKQUOTE" ? "blockquote" : (blockTag === "blockquote" ? "blockquote" : "p");
         const cls = el.getAttribute("class") || "";
         const m = /MsoHeading(\d)|Heading(\d)/i.exec(cls);
         if (m) bt = "h" + (m[1] || m[2]);
@@ -418,6 +445,19 @@
     return words <= (det.maxHeadingWords || 15);
   }
 
+  /** Kutipan langsung (mis. wawancara): diawali tanda kutip, setelah tanda kutip penutup hanya atribusi pendek. */
+  function looksLikeQuote(text, block) {
+    if (block.tag === "blockquote") return true;
+    const t = text.trim();
+    if (!/^[“"‘«]/.test(t)) return false;
+    const w = countWords(t);
+    if (w < 3 || w > 250) return false;
+    const close = Math.max(t.lastIndexOf("”"), t.lastIndexOf('"'), t.lastIndexOf("»"));
+    if (close <= 0) return false;
+    const tail = t.slice(close + 1);
+    return countWords(tail) <= 20; // "Girl student, S3" / "(Teacher, S1)" / "— Parent"
+  }
+
   function numberingDepth(t) {
     const m = /^((?:\d+\.)*\d+)\.?\s+/.exec(t);
     if (m) return m[1].split(".").length;
@@ -450,6 +490,7 @@
       if (myNames.has(normHead(text)) && countWords(text) <= 8) { items.push({ type: "skip", runs, why: "judul bagian" }); continue; }
       if (RE_CAPTION.test(text)) { items.push({ type: "caption", runs }); continue; }
       if (RE_NOTE.test(text)) { items.push({ type: "note", runs }); continue; }
+      if (det.detectQuotes !== false && looksLikeQuote(text, bl)) { items.push({ type: "quote", runs }); continue; }
       // heading tidak boleh paragraf terakhir yang berdiri sendiri? -> tetap boleh, tapi butuh sinyal kuat
       const isLast = idx === blocks.length - 1;
       if (looksLikeHeading(text, runs, bl, det)) {
@@ -501,17 +542,20 @@
   /* ------------------------------------------------------------------ */
   /*  Referensi                                                          */
   /* ------------------------------------------------------------------ */
-  const RE_REF_START = /^(?:\[\d+\]\s*|\d+\.\s+)?(?:[\p{Lu}][\p{L}'’\-]+(?:[ -][\p{L}'’\-]+){0,3},\s*(?:[\p{Lu}]\.|[\p{Lu}][\p{Ll}]+)|[\p{Lu}][\p{L}&.,'’\- ]{1,120}?\s\((?:\d{4}[a-z]?|n\.d\.|in press)[^)]*\)|[\p{Lu}][\p{L}'’\-]+(?: [\p{Lu}][\p{L}'’\-]+)*\.?\s\((?:\d{4}|n\.d\.))/u;
+  const RE_REF_START = /^(?:\[\d+\]\s*|\d+\.\s+)?(?:(?:van|von|de|der|den|da|di|du|del|della|le|la|al|el|bin|binti|ten|ter)\s+)*(?:[\p{Lu}][\p{L}'’\-]+(?:[ -][\p{L}'’\-]+){0,3},\s*(?:[\p{Lu}]\.|[\p{Lu}][\p{Ll}]+)|[\p{Lu}][\p{L}&.,'’\- ]{1,120}?\s\((?:\d{4}[a-z]?|n\.d\.|in press)[^)]*\)|[\p{Lu}][\p{L}'’\-]+(?: [\p{Lu}][\p{L}'’\-]+)*\.?\s\((?:\d{4}|n\.d\.))/u;
 
+  const RE_PARTICLE = /^(?:van|von|de|der|den|da|di|du|del|della|le|la|al|el|bin|binti|ten|ter)\s+\p{Lu}[\p{L}'’\-]+,/u;
   function splitRefBlocks(blocks, det) {
     // pecah blok menjadi baris; untuk teks biasa sambung baris-baris lanjutan
     let lines = [];
     for (const b of blocks) {
       if (b.kind === "table") { b.rows.forEach((row) => lines.push({ runs: normalizeRuns([{ text: row.join(" ") }]) })); continue; }
-      lines.push({ runs: b.runs });
+      lines.push({ runs: b.runs, fromHtml: !!b.html });
     }
     lines = lines.filter((l) => plain(l.runs).trim());
     if (!det.mergeBrokenLines || lines.length < 2) return lines;
+    // HTML (Word/Google Docs): setiap paragraf sudah satu referensi
+    if (lines.length && lines.every((l) => l.fromHtml)) return lines;
     const starts = lines.map((l) => RE_REF_START.test(plain(l.runs).trim()));
     const nonStart = starts.filter((s) => !s).length;
     if (nonStart === 0) return lines;
@@ -524,7 +568,7 @@
       const prevLine = k > 0 ? plain(lines[k - 1].runs).trim() : "";
       const prevEndsRef = /https?:\/\/\S+$|doi\.org\/\S+$/i.test(prevLine) ||
         (/[.)]$/.test(prevLine) && !/(?:^|[\s,(])\p{Lu}\.$/u.test(prevLine)); // "…, D." = inisial penulis, belum selesai
-      const continuation = prev && (!starts[k] || startsLower(t) || !prevEndsRef || /[,&]$|\band$/.test(prevLine));
+      const continuation = prev && (!starts[k] || (startsLower(t) && !RE_PARTICLE.test(t)) || !prevEndsRef || /[,&]$|\band$/.test(prevLine));
       if (continuation) {
         const glue = /-$/.test(prevT) && /^\p{Ll}/u.test(t) ? "" : " ";
         if (!glue) prev.runs[prev.runs.length - 1].text = prev.runs[prev.runs.length - 1].text.replace(/-$/, "");
@@ -549,10 +593,21 @@
       const volEnd = rest.indexOf(j[3], jStart + j[2].length) + j[3].length;
       if (jStart > 0 && volEnd > jStart) return patchRange(runs, after + jStart, after + volEnd, { i: true });
     }
+    // Laporan / halaman web tanpa penerbit: (2020). Judul laporan. https://…  -> judul italic
+    const web = /^(.+?)\.\s+(https?:\/\/\S+)\s*$/.exec(rest);
+    if (web && !/\d+\(\d+\)/.test(web[1]) && !/^In\s/i.test(web[1]) && web[1].indexOf(". ") < 0) {
+      let end = web[1].length;
+      const tail = /\s+(\([^()]*\)|\[[^\[\]]*\])\s*$/.exec(web[1]);
+      if (tail) end -= tail[0].length;
+      return patchRange(runs, after, after + end, { i: true });
+    }
     // Buku: (2020). Judul buku (edisi). Penerbit.  -> miringkan judul bila tidak ada pola jurnal
     const bk = /^([^.]+(?:\.[^.\s][^.]*)*?)(?:\s\([^)]*ed\.[^)]*\))?\.\s+[\p{Lu}][^.]+\.?\s*(?:https?:\/\/\S+)?\s*$/u.exec(rest);
     if (bk && !/\d+\(\d+\)/.test(rest) && !/,\s*\d+\s*[,(]/.test(rest) && !/^In\s/i.test(rest)) {
-      return patchRange(runs, after, after + bk[1].length, { i: true });
+      let end = bk[1].length;
+      const tail = /\s+(\([^()]*\)|\[[^\[\]]*\])\s*$/.exec(bk[1]);
+      if (tail) end -= tail[0].length;
+      return patchRange(runs, after, after + end, { i: true });
     }
     return runs;
   }
@@ -610,6 +665,7 @@
       case "heading": c = it.level === 3 ? P.h3 : P.h2; break;
       case "caption": c = P.caption; break;
       case "note": c = P.note; break;
+      case "quote": c = P.quote || P.body; left = (c.leftCm || 0) * CM; break;
       case "ref": c = P.references; left = (c.hangingCm || 0) * CM; first = -left; break;
       case "blank": c = Object.assign({}, P.body, { before: 0, after: 0 }); break;
       default: c = P.body; first = (c.firstIndentCm || 0) * CM;
@@ -623,6 +679,7 @@
       line: +c.line || 1,
       firstIndent: Math.round(first * 100) / 100,
       leftIndent: Math.round(left * 100) / 100,
+      rightIndent: it.type === "quote" ? Math.round(((c.rightCm || 0) * CM) * 100) / 100 : 0,
       bold: !!c.bold,
       italic: !!c.italic,
     };
@@ -658,10 +715,10 @@
     }
     if (it.type === "note") {
       const m = RE_NOTE.exec(plain(runs));
-      if (m && profile.note.labelItalic) runs = patchRange(runs, 0, m[0].length - 1, { i: true });
+      if (m && profile.note.labelItalic) runs = patchRange(runs, 0, m[0].length, { i: true });
     }
+    if (it.type === "quote" && profile.quote && profile.quote.italic) runs.forEach((r) => (r.i = true));
     if (it.type === "ref") runs.forEach((r) => (r.b = false));
-    if ((it.type === "body" || it.type === "note") && profile.references.linkDoi) runs = runs.map((r) => r); // biarkan
     return normalizeRuns(runs);
   }
 
@@ -737,7 +794,7 @@
   /** Hitung kata per bagian. */
   function countDocument(infos, heads, profile) {
     const L = profile.limits;
-    const res = { sections: [], total: 0, abstract: 0, limit: L.bodyWords, abstractLimit: L.abstractWords };
+    const res = { sections: [], total: 0, abstract: 0, limit: +L.bodyWords || 0, minLimit: +L.minBodyWords || 0, abstractLimit: +L.abstractWords || 0 };
     for (let k = 0; k < heads.length; k++) {
       const h = heads[k];
       const end = heads[k + 1] ? heads[k + 1].index : infos.length;
@@ -748,19 +805,21 @@
       }
       const sec = profile.sections.find((s) => s.key === h.key);
       const isRef = sec && sec.kind === "references";
-      const counted = !isRef || L.countReferences;
+      const excluded = (L.excludeKeys || []).includes(h.key);
+      const counted = h.key != null && !excluded && (!isRef || L.countReferences);
       res.sections.push({ key: h.key, title: h.title, words: w, counted });
       if (counted) res.total += w;
     }
-    // abstrak: paragraf setelah "ABSTRACT" sampai ARTICLE HISTORY / KEYWORDS / judul bagian
-    const ai = infos.findIndex((p) => /^(abstract|abstrak)$/i.test((p.text || "").trim()));
+    // abstrak: paragraf panjang setelah "ABSTRACT" (melewati Keywords / Article history),
+    // berhenti di judul bagian pertama atau saat keluar dari tabel abstrak
+    const ai = infos.findIndex((p) => /^(abstract|abstrak)\s*[:.]?$/i.test((p.text || "").trim()));
     if (ai >= 0) {
       for (let j = ai + 1; j < infos.length; j++) {
         const t = (infos[j].text || "").trim();
-        if (/^(article history|keywords?|kata kunci|riwayat artikel)\b/i.test(t)) break;
         if (heads.some((h) => h.index === j)) break;
-        if (!infos[j].inTable && infos[ai].inTable) break;
-        res.abstract += countWords(t);
+        if (!infos[j].inTable && infos[ai].inTable && t) break;
+        if (/^(keywords?|kata kunci|article (history|info)|riwayat artikel|received|revised|accepted)\b/i.test(t)) continue;
+        if (countWords(t) >= 20) res.abstract += countWords(t);
       }
     }
     return res;
@@ -790,7 +849,7 @@
   }
 
   return {
-    DEFAULT_PROFILE, mergeProfile, clone,
+    DEFAULT_PROFILE, PRESETS, presetFor, mergeProfile, clone,
     parseInput, parseHtml, parseText, classify, classifyReferences, classifyExisting,
     paraFormat, finalRuns, countWords, plain, normalizeRuns, titleCase, apaAutoItalic, linkUrls,
     findSectionHeadings, sectionRange, pickAnchor, planNewSection, countDocument, normHead,

@@ -56,7 +56,7 @@
     p.lineSpacing = 12 * f.line; // Office.js: nilai poin; UI Word membaginya dengan 12
     p.leftIndent = f.leftIndent;
     p.firstLineIndent = f.firstIndent;
-    p.rightIndent = 0;
+    p.rightIndent = f.rightIndent || 0;
     // format tanda paragraf (mempengaruhi tinggi baris terakhir & teks yang diketik setelahnya)
     p.font.set({ name: profile.font, size: f.size, bold: f.bold, italic: f.italic, color: profile.color, underline: "None", superscript: false, subscript: false });
     p.font.highlightColor = null;
@@ -95,7 +95,7 @@
     const head = tbl.rows.getFirst();
     head.font.bold = !!T.headerBold;
     if (T.apaBorders) { const hb = head.getBorder("Bottom"); hb.type = "Single"; hb.width = 0.5; hb.color = "#000000"; }
-    tbl.horizontalAlignment = "Centered";
+    tbl.horizontalAlignment = T.cellAlign || "Centered";
     if (T.firstColLeft) for (let r = 0; r < rowsCount; r++) tbl.getCell(r, 0).horizontalAlignment = "Left";
   }
 
@@ -304,11 +304,14 @@
     p.lineSpacing = 12 * f.line;
     p.leftIndent = f.leftIndent;
     p.firstLineIndent = f.firstIndent;
+    p.rightIndent = f.rightIndent || 0;
     p.font.name = profile.font;
     p.font.size = f.size;
     if (it.type === "heading" || it.type === "section") {
       p.font.bold = f.bold;
       if (f.italic) p.font.italic = true;
+    } else if (it.type === "quote" && f.italic) {
+      p.font.italic = true;
     } else if (curBold === true && it.type !== "caption") {
       p.font.bold = false; // paragraf seluruhnya bold karena gaya template -> normalkan
     }

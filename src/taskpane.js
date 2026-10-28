@@ -23,12 +23,32 @@
       const raw = localStorage.getItem(STORE);
       if (raw) state.store = JSON.parse(raw);
     } catch (e) { /* localStorage tidak tersedia */ }
-    if (!state.store.profiles || !Object.keys(state.store.profiles).length) {
-      const d = E.clone(E.DEFAULT_PROFILE);
-      state.store = { active: d.name, profiles: { [d.name]: d } };
-    }
-    if (!state.store.profiles[state.store.active]) state.store.active = Object.keys(state.store.profiles)[0];
-    state.profile = E.mergeProfile(state.store.profiles[state.store.active]);
+    const st = state.store;
+    if (!st.profiles) st.profiles = {};
+    // migrasi: nama lama JEPSD -> JEPSI
+    Object.keys(st.profiles).forEach((n) => {
+      const p = st.profiles[n];
+      if (p.base === "jepsd") p.base = "jepsi";
+      if (n.startsWith("JEPSD")) {
+        const nn = n.replace(/^JEPSD/, "JEPSI");
+        p.name = nn; st.profiles[nn] = p; delete st.profiles[n];
+        if (st.active === n) st.active = nn;
+      }
+    });
+    if (st.presetsAdded) st.presetsAdded = st.presetsAdded.map((b) => (b === "jepsd" ? "jepsi" : b));
+    // tandai profil lama yang berasal dari template bawaan
+    Object.values(st.profiles).forEach((p) => { if (!p.base) { const pr = E.PRESETS.find((x) => x.name === p.name); p.base = pr ? pr.base : "aieds"; } });
+    // tambahkan template bawaan yang belum pernah ditambahkan (yang sudah dihapus pengguna tidak dimunculkan lagi)
+    st.presetsAdded = st.presetsAdded || Object.values(st.profiles).map((p) => p.base);
+    E.PRESETS.forEach((pr) => {
+      if (st.presetsAdded.includes(pr.base) && Object.keys(st.profiles).length) return;
+      let n = pr.name, k = 2;
+      while (st.profiles[n]) n = pr.name + " " + k++;
+      st.profiles[n] = Object.assign(E.clone(pr), { name: n });
+      if (!st.presetsAdded.includes(pr.base)) st.presetsAdded.push(pr.base);
+    });
+    if (!st.active || !st.profiles[st.active]) st.active = Object.keys(st.profiles)[0];
+    state.profile = E.mergeProfile(st.profiles[st.active]);
     state.mode = state.profile.layout.insertMode || "section";
   }
   let saveTimer = null;
@@ -86,7 +106,7 @@
   /* ---------------- kartu bagian ---------------- */
   const TYPE_OPTS = [
     ["body", "Isi"], ["heading2", "Heading 2"], ["heading3", "Heading 3"],
-    ["caption", "Caption"], ["note", "Catatan"], ["ref", "Referensi"], ["table", "Tabel"], ["skip", "Lewati"],
+    ["quote", "Kutipan"], ["caption", "Caption"], ["note", "Catatan"], ["ref", "Referensi"], ["table", "Tabel"], ["skip", "Lewati"],
   ];
   const typeKey = (it) => (it.type === "heading" ? "heading" + (it.level || 2) : it.type);
 
@@ -174,6 +194,7 @@
     if (c("caption")) parts.push(c("caption") + " caption");
     if (c("table")) parts.push(c("table") + " tabel");
     if (c("note")) parts.push(c("note") + " catatan");
+    if (c("quote")) parts.push(c("quote") + " kutipan");
     return parts.join(" · ") + (parts.length ? ". Ubah jenis lewat menu di kiri bila deteksi keliru." : "");
   }
 
@@ -242,6 +263,7 @@
       const c = last.count;
       const over = c.limit && c.total > c.limit;
       toast(`✓ ${total} blok disisipkan. Total isi ${fmtN(c.total)}${c.limit ? " / " + fmtN(c.limit) : ""} kata${over ? " — MELEBIHI BATAS" : ""}.`, over ? "err" : "ok", 6000);
+      if (!$("#tab-words").classList.contains("hidden")) renderCounts(c);
     } catch (e) {
       console.error(e);
       toast("Gagal menyisipkan: " + errMsg(e), "err");
@@ -278,21 +300,67 @@
 
   /* ---------------- hitung kata ---------------- */
   async function recount() {
+    renderLimits();
     if (!state.inWord) { renderCounts(null); return; }
     try { state.lastCount = await WordOps.countWords(state.profile); renderCounts(state.lastCount); }
     catch (e) { toast(errMsg(e), "err"); }
   }
+
+  /** Aturan hitung kata — tersimpan per profil jurnal. */
+  function renderLimits() {
+    const L = state.profile.limits;
+    L.excludeKeys = L.excludeKeys || [];
+    const host = $("#limitSettings");
+    const unset = !L.bodyWords && !L.abstractWords && !L.minBodyWords;
+    const num = (k, label, step) => `<label for="lim_${k}">${label}</label><input type="number" min="0" step="${step}" id="lim_${k}" data-k="${k}" value="${+L[k] || 0}">`;
+    const chk = (id, label, on, attrs) => `<label for="${id}">${label}</label><input type="checkbox" id="${id}" ${attrs} ${on ? "checked" : ""}>`;
+    host.innerHTML = `<fieldset class="limits"><details ${unset || state.limitsOpen ? "open" : ""}>
+      <summary>Aturan hitung kata · ${esc(state.store.active.split(" (")[0])}</summary>
+      <div class="fgrid">
+        ${num("bodyWords", "Maksimal kata isi", 100)}
+        ${num("minBodyWords", "Minimal kata isi", 100)}
+        ${num("abstractWords", "Maksimal kata abstrak", 10)}
+        <div class="fdesc">0 = tidak dibatasi. Isi sesuai ketentuan jurnal; tersimpan untuk profil ini saja.</div>
+        ${chk("lim_tables", "Teks di dalam tabel ikut dihitung", L.countTables, 'data-b="countTables"')}
+        <div class="subhead">Bagian yang ikut dihitung</div>
+        ${state.profile.sections.map((s) => {
+          const on = s.kind === "references" ? L.countReferences : !L.excludeKeys.includes(s.key);
+          return chk("lim_s_" + s.key, esc(s.title), on, `data-sec="${esc(s.key)}" data-ref="${s.kind === "references" ? 1 : ""}"`);
+        }).join("")}
+      </div></details></fieldset>
+      ${unset ? '<p class="warnline">Batas kata untuk jurnal ini belum diatur.</p>' : ""}`;
+    host.querySelector("details").addEventListener("toggle", (e) => { state.limitsOpen = e.target.open; });
+    host.querySelectorAll("input").forEach((inp) => inp.addEventListener("change", () => {
+      if (inp.dataset.k) L[inp.dataset.k] = Math.max(0, parseInt(inp.value, 10) || 0);
+      else if (inp.dataset.b) L[inp.dataset.b] = inp.checked;
+      else if (inp.dataset.sec) {
+        if (inp.dataset.ref) L.countReferences = inp.checked;
+        else {
+          L.excludeKeys = L.excludeKeys.filter((k) => k !== inp.dataset.sec);
+          if (!inp.checked) L.excludeKeys.push(inp.dataset.sec);
+        }
+      }
+      state.limitsOpen = true;
+      saveStore();
+      recount();
+    }));
+  }
+
   function renderCounts(c) {
     const T = $("#wordTotals"), W = $("#wordTable");
     if (!c) { T.innerHTML = '<p class="hint">Buka di Word untuk menghitung kata dokumen.</p>'; W.innerHTML = ""; return; }
-    const card = (label, n, lim) => {
-      const over = lim && n > lim;
+    const card = (label, n, lim, min) => {
+      const over = lim && n > lim, under = min && n < min;
       const pct = lim ? Math.min(100, (n / lim) * 100) : 0;
-      return `<div class="total-card ${over ? "over" : ""}"><div class="of">${label}</div>
-        <div><span class="big">${fmtN(n)}</span> <span class="of">${lim ? "/ " + fmtN(lim) + " kata" : "kata"}${over ? " · lebih " + fmtN(n - lim) : lim ? " · sisa " + fmtN(lim - n) : ""}</span></div>
+      let info = lim ? "/ " + fmtN(lim) + " kata" : "kata";
+      if (over) info += " · lebih " + fmtN(n - lim);
+      else if (lim) info += " · sisa " + fmtN(lim - n);
+      if (under) info += " · kurang " + fmtN(min - n) + " dari minimal " + fmtN(min);
+      return `<div class="total-card ${over ? "over" : under ? "under" : ""}"><div class="of">${label}</div>
+        <div><span class="big">${fmtN(n)}</span> <span class="of">${info}</span></div>
         ${lim ? `<div class="bar ${over ? "over" : ""}"><span style="width:${pct}%"></span></div>` : ""}</div>`;
     };
-    T.innerHTML = card("Isi artikel" + (state.profile.limits.countReferences ? " (termasuk referensi)" : " (tanpa referensi)"), c.total, c.limit) + card("Abstrak", c.abstract, c.abstractLimit);
+    T.innerHTML = card("Isi artikel (bagian yang dicentang)", c.total, c.limit, c.minLimit) + card("Abstrak", c.abstract, c.abstractLimit, 0);
     W.innerHTML = `<table class="wtable">${c.sections.map((s) => `<tr class="${s.counted ? "" : "nc"}"><td>${esc(s.title)}</td><td class="n">${fmtN(s.words)}</td></tr>`).join("")}</table>
       ${c.sections.length ? "" : '<p class="hint">Belum ada judul bagian yang dikenali di dokumen.</p>'}`;
   }
@@ -312,12 +380,8 @@
     ["style", "Gaya Word (style)", "text", { desc: "Biarkan Normal kecuali jurnal memakai gaya khusus; tulis persis seperti di Word." }],
   ];
   const GROUPS = [
-    { title: "Umum & batas kata", fields: [
+    { title: "Umum", fields: [
       ["font", "Font", "text"], ["color", "Warna teks", "color"],
-      ["limits.bodyWords", "Batas kata isi artikel", "number", { step: 50, min: 0, desc: "Dihitung dari judul bagian pertama sampai sebelum referensi. 0 = tanpa batas." }],
-      ["limits.abstractWords", "Batas kata abstrak", "number", { step: 10, min: 0 }],
-      ["limits.countReferences", "Referensi ikut dihitung", "bool"],
-      ["limits.countTables", "Teks dalam tabel ikut dihitung", "bool"],
       ["layout.blankBeforeSection", "Sisakan baris kosong sebelum judul bagian berikutnya", "bool"],
     ] },
     { title: "Judul bagian (INTRODUCTION, METHOD, …)", prefix: "sectionHeading", fields: paraFields({ bold: true, caps: true }) },
@@ -326,7 +390,14 @@
     { title: "Paragraf isi", prefix: "body", fields: paraFields({ indent: true }) },
     { title: "Caption tabel & gambar", prefix: "caption", fields: [["labelBold", "Label \"Table 1.\" tebal", "bool"], ...paraFields({})] },
     { title: "Catatan tabel (Note.)", prefix: "note", fields: [["labelItalic", "Label \"Note.\" miring", "bool"], ...paraFields({})] },
+    { title: "Kutipan langsung (wawancara)", prefix: "quote", fields: [
+      ["italic", "Miring (italic)", "bool"],
+      ["leftCm", "Indentasi kiri (cm)", "number", { step: 0.01, min: 0 }],
+      ["rightCm", "Indentasi kanan (cm)", "number", { step: 0.01, min: 0 }],
+      ...paraFields({}),
+    ] },
     { title: "Tabel yang ditempel", prefix: "table", fields: [
+      ["cellAlign", "Perataan isi sel", "select", { options: ALIGN }],
       ["size", "Ukuran font tabel (pt)", "number", { step: 0.5 }], ["headerBold", "Baris judul tebal", "bool"],
       ["apaBorders", "Garis gaya APA (atas, bawah, bawah judul)", "bool"], ["firstColLeft", "Kolom pertama rata kiri", "bool"],
     ] },
@@ -345,6 +416,7 @@
       ["keepBold", "Pertahankan bold di dalam paragraf", "bool"],
       ["keepSupSub", "Pertahankan superscript/subscript", "bool"],
       ["mergeBrokenLines", "Sambung baris terputus (salinan PDF)", "bool"],
+      ["detectQuotes", "Kenali kutipan langsung (diawali tanda kutip “…”)", "bool"],
       ["requireCapsSectionTitle", "Judul bagian di dokumen ditulis KAPITAL", "bool", { desc: "Membedakan judul bagian RESULTS dari sub-heading Results." }],
     ] },
   ];
@@ -354,7 +426,9 @@
 
   function renderTemplate() {
     const sel = $("#profileSelect");
-    sel.innerHTML = Object.keys(state.store.profiles).map((n) => `<option ${n === state.store.active ? "selected" : ""}>${esc(n)}</option>`).join("");
+    const opts = Object.keys(state.store.profiles).map((n) => `<option ${n === state.store.active ? "selected" : ""}>${esc(n)}</option>`).join("");
+    sel.innerHTML = opts;
+    $("#journalSelect").innerHTML = opts;
     const form = $("#templateForm");
     form.innerHTML = "";
     GROUPS.forEach((g, gi) => {
@@ -464,11 +538,17 @@
   }
 
   function initProfiles() {
-    $("#profileSelect").addEventListener("change", (e) => {
-      state.store.active = e.target.value;
-      state.profile = E.mergeProfile(state.store.profiles[state.store.active]);
-      saveStore(); renderTemplate(); state.pending = {}; renderSections(); refreshScan().then(renderSections);
-    });
+    const switchProfile = (name) => {
+      state.store.active = name;
+      state.profile = E.mergeProfile(state.store.profiles[name]);
+      saveStore(); renderTemplate();
+      // isi yang sudah ditempel tetap ada, diklasifikasi ulang dengan aturan jurnal baru
+      Object.keys(state.pending).forEach((k) => { if (state.pending[k]) { if (sec(k)) reclassify(k); else state.pending[k] = null; } });
+      renderSections(); renderLimits(); refreshScan().then(renderSections);
+      toast("Template aktif: " + name.split(" (")[0]);
+    };
+    $("#profileSelect").addEventListener("change", (e) => switchProfile(e.target.value));
+    $("#journalSelect").addEventListener("change", (e) => switchProfile(e.target.value));
     $("#profDup").addEventListener("click", () => {
       let n = state.store.active + " (salinan)", k = 2;
       while (state.store.profiles[n]) n = state.store.active + " (salinan " + k++ + ")";
@@ -493,10 +573,11 @@
       saveStore(); renderTemplate(); renderSections();
     });
     $("#profReset").addEventListener("click", async () => {
-      if (!(await ask("Kembalikan profil ini ke pengaturan default AIEDS?"))) return;
+      const pr = E.presetFor(state.profile.base);
+      if (!(await ask("Kembalikan profil ini ke pengaturan bawaan " + pr.name.split(" (")[0] + "?"))) return;
       const keep = state.store.active;
-      state.profile = E.clone(E.DEFAULT_PROFILE); state.profile.name = keep;
-      saveStore(); renderTemplate(); renderSections(); toast("Profil dikembalikan ke default.");
+      state.profile = E.clone(pr); state.profile.name = keep;
+      saveStore(); renderTemplate(); renderSections(); renderLimits(); toast("Profil dikembalikan ke bawaan.");
     });
     const dlg = $("#jsonDialog");
     $("#profExport").addEventListener("click", () => {
@@ -533,7 +614,7 @@
     $("#notInWord").classList.toggle("hidden", inWord);
     state.open[state.profile.sections[0] && state.profile.sections[0].key] = true;
     initTabs(); initMode(); initProfiles();
-    renderTemplate(); renderSections(); renderCounts(null);
+    renderTemplate(); renderSections(); renderLimits(); renderCounts(null);
     $("#insertAll").addEventListener("click", () => doInsert(state.profile.sections.map((s) => s.key)));
     $("#undoLast").addEventListener("click", doUndo);
     $("#recount").addEventListener("click", recount);
