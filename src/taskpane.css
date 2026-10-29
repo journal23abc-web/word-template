@@ -150,3 +150,5 @@ dialog textarea { width: 100%; height: 260px; font-family: ui-monospace, Consola
 .btn.danger:hover { background: #fdf1f0; border-color: var(--bad); }
 .btn.primary.danger-solid { background: var(--bad); border-color: var(--bad); }
 #askTitle { font-weight: 600; font-size: 13.5px; line-height: 1.45; }
+.pill.ready.over { background: #fdecea; color: var(--bad); border-color: #f3c3bf; }
+.fgrid input.list { grid-column: 1 / -1; }

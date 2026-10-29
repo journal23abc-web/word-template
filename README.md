@@ -7,6 +7,7 @@ Tempel isi artikel per bagian (Introduction, Method, Results and Discussion, Con
 - **Referensi**: hanging indent 1,27 cm, italic otomatis gaya APA (nama jurnal + volume, atau judul buku) bila tempelan tidak membawa italic, DOI jadi hyperlink, baris terputus dari PDF disambung
 - **Caption** (`Table 1.` / `Figure 1.` → label bold, judul normal), **Note.**, dan **tabel** yang ditempel (garis gaya APA, font 10 pt)
 - **Menambah, bukan mengganti**: isi masuk di bawah konten yang sudah ada pada bagian itu. Bila judul bagian belum ada, judulnya dibuat di urutan yang benar
+- **Abstrak**: kartu ABSTRACT mengganti teks di kotak abstrak (bukan menambah). AIEDS memakai format terstruktur: *Purpose – / Methodology – / Findings – / Research limitations – / Originality –*. Label dikenali otomatis dari tempelan (juga *Design/methodology/approach:*, *Tujuan:*, dll.), dibuat **bold**, pemisahnya diseragamkan menjadi " – ", dan komponennya disatukan dalam satu paragraf yang dipisah *line break*, 10 pt rata kiri. JEPSI memakai satu paragraf 9 pt justify. Baris *Keywords* di tempelan dilewati. Abstrak lama bisa dikembalikan, dan jumlah kata dibandingkan dengan batas abstrak jurnal
 - **Hapus isi bagian**: kosongkan seluruh isi satu bagian di dokumen (atau semua bagian sekaligus) dengan judul bagian tetap ada, misalnya untuk mengganti Introduction dengan versi baru. Ada konfirmasi dan tombol **Kembalikan isi yang dihapus** (selama panel masih terbuka), dan Ctrl+Z tetap bisa dipakai
 - **Rapikan isi yang ada**: terapkan format template ke paragraf yang sudah terlanjur ditempel manual (italic tidak diubah)
 - **Kutipan langsung** (mis. kutipan wawancara “…” Guru, S1) dikenali dan dibuat menjorok + italic
@@ -22,6 +23,7 @@ Tempel isi artikel per bagian (Introduction, Method, Results and Discussion, Con
 | Sub-heading | 11 pt bold, 3/3 pt | 11 pt bold, 0/6 pt |
 | Isi | 11 pt justify, 3/3 pt, spasi tunggal | 11 pt justify, 0/6 pt, spasi tunggal |
 | Caption / Note. | label bold / Note. tegak | label bold / *Note.* italic |
+| Abstrak | terstruktur, label bold " – ", 10 pt rata kiri, 1 paragraf dengan line break | 1 paragraf, 9 pt justify, sesudah 8 pt, spasi 1,08 |
 | Kutipan langsung | menjorok 1,27 cm, italic | menjorok 1,27 cm, italic |
 | Tabel | 10 pt, garis APA, isi rata tengah | 10 pt, garis APA, isi rata kiri |
 | Referensi | 11 pt, hanging 1,27 cm, sesudah 6 pt | 11 pt, hanging 1,27 cm, sesudah 6 pt |

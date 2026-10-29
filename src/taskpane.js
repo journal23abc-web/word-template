@@ -48,6 +48,12 @@
       st.profiles[n] = Object.assign(E.clone(pr), { name: n });
       if (!st.presetsAdded.includes(pr.base)) st.presetsAdded.push(pr.base);
     });
+    // profil lama: tambahkan kartu ABSTRACT bila belum ada
+    Object.values(st.profiles).forEach((p) => {
+      if (Array.isArray(p.sections) && !p.sections.some((x) => x.kind === "abstract")) {
+        p.sections.unshift(E.clone(E.presetFor(p.base).sections.find((x) => x.kind === "abstract")));
+      }
+    });
     if (!st.active || !st.profiles[st.active]) st.active = Object.keys(st.profiles)[0];
     state.profile = E.mergeProfile(st.profiles[st.active]);
     state.mode = state.profile.layout.insertMode || "section";
@@ -116,9 +122,10 @@
   }
   function sec(key) { return state.profile.sections.find((s) => s.key === key); }
 
+const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"; };
   function reclassify(key) {
     const p = pend(key);
-    p.items = E.classify(p.blocks, sec(key), state.profile);
+    p.items = isAbs(key) ? E.classifyAbstract(p.blocks, sec(key), state.profile) : E.classify(p.blocks, sec(key), state.profile);
     Object.entries(p.overrides).forEach(([i, v]) => {
       const it = p.items[i];
       if (!it) return;
@@ -141,7 +148,7 @@
   }
 
   function itemWords(items) {
-    return items.filter((i) => i.type !== "skip").reduce((a, i) => a + (i.type === "table" ? 0 : E.countWords(E.plain(i.runs))), 0);
+    return items.filter((i) => i.type !== "skip").reduce((a, i) => a + (i.type === "table" ? 0 : E.countWords((i.label ? i.label + " " : "") + E.plain(i.runs))), 0);
   }
 
   function renderSections() {
@@ -153,26 +160,32 @@
       const card = document.createElement("section");
       card.className = "sec" + (state.open[s.key] ? " open" : "");
       card.dataset.key = s.key;
-      const docPill = state.inWord ? (state.found[s.key] ? '<span class="pill indoc" title="Judul bagian ditemukan di dokumen">ada</span>' : '<span class="pill new" title="Judul bagian akan dibuat otomatis">baru</span>') : "";
+      const abs = s.kind === "abstract";
+      const docPill = state.inWord ? (state.found[s.key] ? '<span class="pill indoc" title="Judul bagian ditemukan di dokumen">ada</span>'
+        : abs ? '<span class="pill new" title="Judul ABSTRACT tidak ditemukan; gunakan mode Posisi kursor">tidak ada</span>' : '<span class="pill new" title="Judul bagian akan dibuat otomatis">baru</span>') : "";
+      const words = itemWords(p.items), absLim = +state.profile.limits.abstractWords || 0;
+      const readyPill = !live.length ? "" : abs
+        ? `<span class="pill ready${absLim && words > absLim ? " over" : ""}">${fmtN(words)}${absLim ? " / " + fmtN(absLim) : ""} kata</span>`
+        : `<span class="pill ready">${live.length} siap · ${fmtN(words)} kata</span>`;
       card.innerHTML = `
         <div class="sec-head">
           <svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
           <div class="sec-title">${esc(s.title)}</div>
-          ${live.length ? `<span class="pill ready">${live.length} siap · ${fmtN(itemWords(p.items))} kata</span>` : ""}
+          ${readyPill}
           ${docPill}
         </div>
         <div class="sec-body">
-          <div class="drop" contenteditable="true" spellcheck="false" data-key="${esc(s.key)}">Klik di sini lalu tekan Ctrl+V (⌘V) untuk menempel isi ${esc(titleCase(s.title))}</div>
+          <div class="drop" contenteditable="true" spellcheck="false" data-key="${esc(s.key)}">Klik di sini lalu tekan Ctrl+V (⌘V) untuk menempel ${abs ? "abstrak (menggantikan abstrak yang ada di dokumen)" : "isi " + esc(titleCase(s.title))}</div>
           ${p.images ? `<p class="warnline">${p.images} gambar di tempelan diabaikan — sisipkan gambar langsung di Word.</p>` : ""}
           <div class="preview ${p.items.length ? "" : "hidden"}"></div>
           <div class="sec-meta ${p.items.length ? "" : "hidden"}">${summary(p.items)}</div>
           <div class="sec-actions">
-            <button class="btn primary small act-insert" ${live.length ? "" : "disabled"}>Sisipkan ke dokumen</button>
-            <button class="btn small act-reformat" title="Terapkan format template ke isi yang sudah ada di bagian ini">Rapikan isi yang ada</button>
+            <button class="btn primary small act-insert" ${live.length ? "" : "disabled"}>${abs ? "Ganti abstrak di dokumen" : "Sisipkan ke dokumen"}</button>
+            ${abs ? "" : '<button class="btn small act-reformat" title="Terapkan format template ke isi yang sudah ada di bagian ini">Rapikan isi yang ada</button>'}
             <button class="btn small ghost act-clear" ${p.items.length ? "" : "disabled"} title="Kosongkan tempelan di panel ini (dokumen tidak berubah)">Kosongkan tempelan</button>
           </div>
           <div class="sec-actions danger-zone">
-            <button class="btn small danger act-wipe" ${state.inWord && !state.found[s.key] ? "disabled" : ""} title="Hapus semua isi bagian ini di dokumen; judul bagian tetap ada">Hapus isi bagian ini di dokumen</button>
+            <button class="btn small danger act-wipe" ${state.inWord && !state.found[s.key] ? "disabled" : ""} title="Hapus semua isi bagian ini di dokumen; judul bagian tetap ada">${abs ? "Kosongkan abstrak di dokumen" : "Hapus isi bagian ini di dokumen"}</button>
             ${state.backup[s.key] ? `<button class="btn small act-restore" title="Kembalikan isi yang terakhir dihapus">↶ Kembalikan isi yang dihapus</button>` : ""}
           </div>
         </div>`;
@@ -185,7 +198,7 @@
       drop.addEventListener("keydown", (ev) => { if (!(ev.ctrlKey || ev.metaKey) && ev.key.length === 1) ev.preventDefault(); });
       drop.addEventListener("drop", (ev) => ev.preventDefault());
       card.querySelector(".act-insert").addEventListener("click", () => doInsert([s.key]));
-      card.querySelector(".act-reformat").addEventListener("click", () => doReformat(s.key));
+      if (!abs) card.querySelector(".act-reformat").addEventListener("click", () => doReformat(s.key));
       card.querySelector(".act-clear").addEventListener("click", () => { state.pending[s.key] = null; renderSections(); });
       card.querySelector(".act-wipe").addEventListener("click", () => doWipe([s.key]));
       const rb = card.querySelector(".act-restore");
@@ -194,6 +207,11 @@
   }
 
   function summary(items) {
+    if (items.some((i) => i.type === "abstract")) {
+      const lab = items.filter((i) => i.type === "abstract" && i.label).length;
+      const sk = items.filter((i) => i.type === "skip" && i.why === "keywords").length;
+      return (lab ? `Abstrak terstruktur: ${lab} label dibuat bold.` : "Abstrak satu bagian.") + (sk ? " Baris Keywords tidak dimasukkan." : "") + " Abstrak lama di dokumen akan diganti (bisa dikembalikan).";
+    }
     const c = (t, l) => items.filter((i) => i.type === t && (l == null || i.level === l)).length;
     const parts = [];
     if (c("body")) parts.push(c("body") + " paragraf");
@@ -214,7 +232,8 @@
       const row = document.createElement("div");
       row.className = "prow t-" + it.type + (it.level === 3 ? " l3" : "");
       const sel = document.createElement("select");
-      TYPE_OPTS.forEach(([v, l]) => {
+      const opts = isAbs(key) ? [["abstract", "Abstrak"], ["skip", "Lewati"]] : TYPE_OPTS;
+      opts.forEach(([v, l]) => {
         if (v === "table" && it.type !== "table") return;
         if (it.type === "table" && !["table", "skip"].includes(v)) return;
         const o = document.createElement("option"); o.value = v; o.textContent = l; sel.appendChild(o);
@@ -226,7 +245,7 @@
       });
       const txt = document.createElement("div");
       txt.className = "txt";
-      txt.innerHTML = it.type === "table" ? esc(`Tabel ${it.rows.length} baris × ${Math.max(...it.rows.map((r) => r.length))} kolom: ${it.rows[0].join(" | ")}`).slice(0, 200) : runsHtml(it.runs, 180);
+      txt.innerHTML = it.type === "abstract" && it.label ? "<b>" + esc(it.label) + " –</b> " + runsHtml(it.runs, 160) : it.type === "table" ? esc(`Tabel ${it.rows.length} baris × ${Math.max(...it.rows.map((r) => r.length))} kolom: ${it.rows[0].join(" | ")}`).slice(0, 200) : runsHtml(it.runs, 180);
       row.append(sel, txt);
       box.appendChild(row);
     });
@@ -261,6 +280,16 @@
       let last = null, total = 0;
       for (const k of todo) {
         const items = pend(k).items;
+        if (isAbs(k)) {
+          const r = await WordOps.insertAbstract(items, state.profile, state.mode);
+          if (r.backup) state.backup[k] = r.backup;
+          total += r.inserted;
+          const lim = +state.profile.limits.abstractWords || 0;
+          if (lim && r.words > lim) toast(`Abstrak ${fmtN(r.words)} kata — melebihi batas ${fmtN(lim)}.`, "err");
+          state.pending[k] = null;
+          if (todo.length === 1) { await refreshScan(); renderSections(); toast(`✓ Abstrak diganti (${fmtN(r.words)} kata${lim ? " / " + fmtN(lim) : ""}). Abstrak lama bisa dikembalikan.`, lim && r.words > lim ? "err" : "ok", 6000); return; }
+          continue;
+        }
         last = await WordOps.insertSection(k, items, state.profile, state.mode);
         total += last.inserted;
         if (last.missingStyles && last.missingStyles.length) toast("Gaya tidak ditemukan, dipakai Normal: " + last.missingStyles.join(", "), "err");
@@ -289,7 +318,9 @@
       return a + (r ? r.words : 0);
     }, 0);
     const names = targets.map((k) => sec(k).title).join(", ");
-    const msg = targets.length === 1
+    const msg = targets.length === 1 && isAbs(targets[0])
+      ? "Kosongkan teks abstrak di dokumen? Judul ABSTRACT dan isi kotak lain (keywords, article history) tidak berubah."
+      : targets.length === 1
       ? `Hapus SEMUA isi ${names} di dokumen (±${fmtN(words)} kata, termasuk sub-heading, tabel & gambar)? Judul bagian tetap ada.`
       : `Hapus SEMUA isi ${targets.length} bagian (${names}) — ±${fmtN(words)} kata, termasuk tabel & gambar? Judul-judul bagian tetap ada.`;
     if (!(await ask(msg, null, { ok: "Hapus", danger: true }))) return;
@@ -299,7 +330,7 @@
       // dari bagian paling bawah ke atas
       const order = state.profile.sections.map((x) => x.key).filter((k) => targets.includes(k)).reverse();
       for (const k of order) {
-        const r = await WordOps.clearSection(k, state.profile);
+        const r = isAbs(k) ? await WordOps.clearAbstract(state.profile) : await WordOps.clearSection(k, state.profile);
         if (r.ooxml) state.backup[k] = r.ooxml;
         total += r.deleted;
       }
@@ -313,7 +344,8 @@
     if (!needWord() || !state.backup[key]) return;
     setBusy(true);
     try {
-      await WordOps.restoreSection(key, state.backup[key], state.profile);
+      if (isAbs(key)) await WordOps.restoreAbstract(state.backup[key], state.profile);
+      else await WordOps.restoreSection(key, state.backup[key], state.profile);
       delete state.backup[key];
       await refreshScan(); renderSections();
       toast("✓ Isi " + sec(key).title + " dikembalikan.", "ok");
@@ -376,7 +408,7 @@
         <div class="fdesc">0 = tidak dibatasi. Isi sesuai ketentuan jurnal; tersimpan untuk profil ini saja.</div>
         ${chk("lim_tables", "Teks di dalam tabel ikut dihitung", L.countTables, 'data-b="countTables"')}
         <div class="subhead">Bagian yang ikut dihitung</div>
-        ${state.profile.sections.map((s) => {
+        ${state.profile.sections.filter((s) => s.kind !== "abstract").map((s) => {
           const on = s.kind === "references" ? L.countReferences : !L.excludeKeys.includes(s.key);
           return chk("lim_s_" + s.key, esc(s.title), on, `data-sec="${esc(s.key)}" data-ref="${s.kind === "references" ? 1 : ""}"`);
         }).join("")}
@@ -443,6 +475,18 @@
     { title: "Paragraf isi", prefix: "body", fields: paraFields({ indent: true }) },
     { title: "Caption tabel & gambar", prefix: "caption", fields: [["labelBold", "Label \"Table 1.\" tebal", "bool"], ...paraFields({})] },
     { title: "Catatan tabel (Note.)", prefix: "note", fields: [["labelItalic", "Label \"Note.\" miring", "bool"], ...paraFields({})] },
+    { title: "Abstrak", prefix: "abstract", fields: [
+      ["size", "Ukuran font (pt)", "number", { step: 0.5, min: 6 }],
+      ["italic", "Miring (italic)", "bool"],
+      ["align", "Perataan", "select", { options: ALIGN }],
+      ["before", "Spasi sebelum (pt)", "number", { step: 1, min: 0 }],
+      ["after", "Spasi sesudah (pt)", "number", { step: 1, min: 0 }],
+      ["line", "Spasi baris (1 = tunggal)", "number", { step: 0.01, min: 0.5 }],
+      ["labelBold", "Label abstrak terstruktur bold (Purpose – …)", "bool"],
+      ["labelSep", "Pemisah label (kosong = ikuti tempelan)", "text", { desc: "Contoh: \" – \" (AIEDS) atau \": \"" }],
+      ["joinLabeled", "Komponen terstruktur", "select", { options: [["linebreak", "1 paragraf, dipisah line break"], ["paragraphs", "Paragraf terpisah"]] }],
+      ["labels", "Label yang dikenali (pisahkan koma)", "list"],
+    ] },
     { title: "Kutipan langsung (wawancara)", prefix: "quote", fields: [
       ["italic", "Miring (italic)", "bool"],
       ["leftCm", "Indentasi kiri (cm)", "number", { step: 0.01, min: 0 }],
@@ -505,13 +549,14 @@
         } else {
           inp = document.createElement("input");
           inp.type = type === "bool" ? "checkbox" : type;
-          if (type === "bool") inp.checked = !!val; else inp.value = val == null ? "" : val;
+          if (type === "list") inp.type = "text";
+          if (type === "bool") inp.checked = !!val; else inp.value = val == null ? "" : Array.isArray(val) ? val.join(", ") : val;
           if (opt.step) inp.step = opt.step;
           if (opt.min != null) inp.min = opt.min;
         }
         inp.id = id;
         inp.addEventListener("change", () => {
-          let v = type === "bool" ? inp.checked : type === "number" ? parseFloat(inp.value) : inp.value;
+          let v = type === "bool" ? inp.checked : type === "number" ? parseFloat(inp.value) : type === "list" ? inp.value.split(",").map((x) => x.trim()).filter(Boolean) : inp.value;
           if (type === "number" && isNaN(v)) v = 0;
           setPath(state.profile, path, v);
           saveStore();
@@ -542,7 +587,7 @@
         <span class="lab">Judul di dokumen</span><input type="text" data-f="title" value="${esc(s.title)}">
         <span class="lab">Nama lain (pisahkan koma)</span><input type="text" data-f="aliases" value="${esc((s.aliases || []).join(", "))}">
         <span class="lab">Sub-heading tingkat 2 khusus (mis. Results, Discussion)</span><input type="text" data-f="majors" value="${esc((s.majorSubheadings || []).join(", "))}">
-        <div class="tools"><label><input type="checkbox" data-f="refs" ${s.kind === "references" ? "checked" : ""}> Bagian referensi</label>
+        <div class="tools">${s.kind === "abstract" ? '<span class="lab">Abstrak (mengganti isi kotak abstrak)</span>' : `<label><input type="checkbox" data-f="refs" ${s.kind === "references" ? "checked" : ""}> Bagian referensi</label>`}
           <span><button type="button" class="icon-btn" data-a="up" title="Naik">↑</button> <button type="button" class="icon-btn" data-a="down" title="Turun">↓</button> <button type="button" class="icon-btn" data-a="del" title="Hapus">✕</button></span></div>`;
       el.querySelectorAll("input").forEach((inp) => inp.addEventListener("change", () => {
         const f = inp.dataset.f;
@@ -673,7 +718,7 @@
     renderTemplate(); renderSections(); renderLimits(); renderCounts(null);
     $("#insertAll").addEventListener("click", () => doInsert(state.profile.sections.map((s) => s.key)));
     $("#undoLast").addEventListener("click", doUndo);
-    $("#wipeAll").addEventListener("click", () => doWipe(state.profile.sections.map((x) => x.key)));
+    $("#wipeAll").addEventListener("click", () => doWipe(state.profile.sections.filter((x) => x.kind !== "abstract").map((x) => x.key)));
     $("#recount").addEventListener("click", recount);
     if (inWord) refreshScan().then(renderSections);
   }

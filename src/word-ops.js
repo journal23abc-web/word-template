@@ -179,6 +179,7 @@
       const { infos, heads } = await readStructure(context, profile);
       const found = {};
       heads.forEach((h) => { if (h.key) found[h.key] = true; });
+      if (infos.some((p) => E.RE_ABSTRACT_HEAD.test((p.text || "").trim()))) found.abstract = true;
       return { found, count: E.countDocument(infos, heads, profile) };
     });
   }
@@ -371,6 +372,119 @@
     });
   }
 
+  /* ---------------- abstrak ---------------- */
+  async function locateAbstract(context, profile) {
+    const { paras, infos, heads } = await readStructure(context, profile);
+    const h = infos.findIndex((p) => E.RE_ABSTRACT_HEAD.test((p.text || "").trim()));
+    if (h < 0) return null;
+    const win = [];
+    for (let j = h; j < Math.min(infos.length, h + 80); j++) {
+      if (!infos[j].inTable) { if (j > h) break; continue; }
+      const c = paras[j].parentTableCellOrNullObject;
+      c.load("rowIndex,cellIndex");
+      win.push([j, c]);
+    }
+    if (win.length) {
+      await context.sync();
+      win.forEach(([j, c]) => { if (!c.isNullObject) { infos[j].row = c.rowIndex; infos[j].cell = c.cellIndex; } });
+    }
+    return { paras, infos, heads, h, pick: E.pickAbstractTarget(infos, h) };
+  }
+
+  function writeAbstractParagraph(p, runs, profile) {
+    const f = E.paraFormat({ type: "abstract" }, profile);
+    // gaya paragraf (mis. Heading 3 + latar merah muda di AIEDS) sengaja TIDAK diubah
+    p.alignment = f.align;
+    p.spaceBefore = f.before;
+    p.spaceAfter = f.after;
+    p.lineSpacing = 12 * f.line;
+    p.leftIndent = 0; p.firstLineIndent = 0;
+    p.font.set({ name: profile.font, size: f.size, bold: false, italic: f.italic, color: profile.color, underline: "None" });
+    let last = null;
+    for (const r of runs) {
+      if (r.br) { if (last) last.insertBreak("Line", "After"); continue; }
+      if (!r.text) continue;
+      last = p.insertText(r.text, "End");
+      last.font.set({ name: profile.font, size: f.size, bold: !!r.b, italic: !!r.i, superscript: !!r.sup, subscript: !!r.sub, color: profile.color, underline: "None" });
+    }
+  }
+
+  /** Ganti isi abstrak di dokumen (atau sisipkan di kursor). */
+  async function insertAbstract(items, profile, mode) {
+    const out = E.abstractParagraphs(items, profile);
+    if (!out.length) throw new Error("Tidak ada teks abstrak untuk disisipkan.");
+    return Word.run(async (context) => {
+      let p0, backup = null;
+      if (mode === "cursor") {
+        const sel = context.document.getSelection().paragraphs.getLast();
+        sel.load("text,tableNestingLevel");
+        await context.sync();
+        p0 = sel.text.trim() ? sel.insertParagraph("", "After") : sel;
+        if (!sel.text.trim()) p0.clear();
+      } else {
+        const loc = await locateAbstract(context, profile);
+        if (!loc) throw new Error("Judul ABSTRACT tidak ditemukan di dokumen. Pakai mode 'Posisi kursor'.");
+        const { paras, pick } = loc;
+        if (pick.targets.length) {
+          const t = pick.targets;
+          const ox = paras[t[0]].getRange("Start").expandTo(paras[t[t.length - 1]].getRange("End")).getOoxml();
+          await context.sync();
+          backup = ox.value;
+          for (let k = t.length - 1; k >= 1; k--) paras[t[k]].delete();
+          p0 = paras[t[0]];
+          p0.clear();
+        } else {
+          p0 = paras[pick.after].insertParagraph("", "After");
+        }
+      }
+      writeAbstractParagraph(p0, out[0], profile);
+      let prev = p0;
+      for (let k = 1; k < out.length; k++) {
+        const q = prev.insertParagraph("", "After");
+        writeAbstractParagraph(q, out[k], profile);
+        prev = q;
+      }
+      p0.getRange("Start").select("Start");
+      await context.sync();
+      const words = out.reduce((a, p) => a + E.countWords(p.filter((r) => !r.br).map((r) => r.text).join(" ")), 0);
+      return { inserted: out.length, words, backup };
+    });
+  }
+
+  /** Kosongkan abstrak (sisakan satu paragraf kosong). */
+  async function clearAbstract(profile) {
+    return Word.run(async (context) => {
+      const loc = await locateAbstract(context, profile);
+      if (!loc) throw new Error("Judul ABSTRACT tidak ditemukan di dokumen.");
+      const { paras, infos, pick } = loc;
+      const t = pick.targets;
+      if (!t.length || t.every((j) => !(infos[j].text || "").trim())) return { deleted: 0, words: 0, ooxml: null };
+      const words = t.reduce((a, j) => a + E.countWords(infos[j].text), 0);
+      const ox = paras[t[0]].getRange("Start").expandTo(paras[t[t.length - 1]].getRange("End")).getOoxml();
+      await context.sync();
+      for (let k = t.length - 1; k >= 1; k--) paras[t[k]].delete();
+      paras[t[0]].clear();
+      await context.sync();
+      return { deleted: t.length, words, ooxml: ox.value };
+    });
+  }
+
+  async function restoreAbstract(ooxml, profile) {
+    return Word.run(async (context) => {
+      const loc = await locateAbstract(context, profile);
+      if (!loc) throw new Error("Judul ABSTRACT tidak ditemukan di dokumen.");
+      const { paras, pick } = loc;
+      const t = pick.targets;
+      if (!t.length) { paras[pick.after].insertParagraph("", "After").insertOoxml(ooxml, "Replace"); }
+      else {
+        for (let k = t.length - 1; k >= 1; k--) paras[t[k]].delete();
+        paras[t[0]].insertOoxml(ooxml, "Replace");
+      }
+      await context.sync();
+      return true;
+    });
+  }
+
   async function countWords(profile) {
     return Word.run(async (context) => {
       const { infos, heads } = await readStructure(context, profile);
@@ -392,5 +506,5 @@
     });
   }
 
-  root.WordOps = { scan, insertSection, reformatSection, clearSection, restoreSection, countWords, undoLast, _internal: { insertItems, formatNewParagraph, setStyle } };
+  root.WordOps = { scan, insertSection, reformatSection, clearSection, restoreSection, insertAbstract, clearAbstract, restoreAbstract, countWords, undoLast, _internal: { insertItems, formatNewParagraph, setStyle } };
 })(typeof self !== "undefined" ? self : this);

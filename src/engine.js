@@ -38,6 +38,15 @@
     body:    { style: "Normal", size: 11, align: "Justified", firstIndentCm: 0, before: 3, after: 3, line: 1 },
     caption: { style: "Normal", size: 11, align: "Centered", labelBold: true, before: 3, after: 3, line: 1 },
     note:    { style: "Normal", size: 11, align: "Justified", labelItalic: false, before: 3, after: 4, line: 1 },
+    abstract: {
+      size: 10, align: "Left", before: 0, after: 0, line: 1, italic: false,
+      labelBold: true,          // label abstrak terstruktur (Purpose – …) dibuat bold
+      labelSep: " – ",          // pemisah label; kosong = pakai pemisah dari tempelan
+      joinLabeled: "linebreak", // 'linebreak' = satu paragraf dipisah line break; 'paragraphs' = paragraf terpisah
+      labels: ["Purpose", "Aim", "Aims", "Objective", "Objectives", "Background", "Design/methodology/approach", "Methodology", "Methods", "Method", "Design", "Approach",
+        "Findings", "Results", "Research limitations/implications", "Research limitations", "Limitations", "Practical implications", "Social implications", "Implications",
+        "Originality/value", "Originality", "Value", "Conclusion", "Conclusions", "Novelty", "Tujuan", "Metode", "Hasil", "Temuan", "Kesimpulan", "Keterbatasan", "Implikasi", "Orisinalitas", "Kebaruan"],
+    },
     quote:   { style: "Normal", size: 11, align: "Justified", leftCm: 1.27, rightCm: 0, italic: true, before: 3, after: 3, line: 1 },
     table:   { size: 10, headerBold: true, apaBorders: true, firstColLeft: true, cellAlign: "Centered" },
     references: {
@@ -56,6 +65,7 @@
       detectQuotes: true,
     },
     sections: [
+      { key: "abstract", title: "ABSTRACT", aliases: ["Abstract", "Abstrak"], kind: "abstract" },
       { key: "intro",   title: "INTRODUCTION", aliases: ["Introduction", "Pendahuluan", "Background"] },
       { key: "method",  title: "METHOD", aliases: ["Methods", "Methodology", "Research Method", "Research Methods", "Materials and Methods", "Metode", "Metode Penelitian", "Metodologi"] },
       { key: "rd",      title: "RESULTS AND DISCUSSION", aliases: ["Results and Discussions", "Result and Discussion", "Results & Discussion", "Hasil dan Pembahasan"],
@@ -83,6 +93,7 @@
     Object.assign(p.quote, sp, { leftCm: 1.27, italic: true });
     Object.assign(p.table, { cellAlign: "Left" });
     Object.assign(p.references, sp, { hangingCm: 1.27 });
+    Object.assign(p.abstract, { size: 9, align: "Justified", before: 0, after: 8, line: 1.08, labelSep: "", joinLabeled: "paragraphs" });
     p.sections.find((s) => s.key === "intro").aliases.push("Introduction and Literature Review");
     return p;
   })();
@@ -665,6 +676,7 @@
       case "heading": c = it.level === 3 ? P.h3 : P.h2; break;
       case "caption": c = P.caption; break;
       case "note": c = P.note; break;
+      case "abstract": c = Object.assign({}, P.abstract || DEFAULT_PROFILE.abstract, { bold: false }); break;
       case "quote": c = P.quote || P.body; left = (c.leftCm || 0) * CM; break;
       case "ref": c = P.references; left = (c.hangingCm || 0) * CM; first = -left; break;
       case "blank": c = Object.assign({}, P.body, { before: 0, after: 0 }); break;
@@ -732,7 +744,7 @@
   function findSectionHeadings(infos, profile) {
     const det = profile.detect;
     const lookup = new Map();
-    for (const s of profile.sections) for (const n of sectionNames(s)) lookup.set(n, s.key);
+    for (const s of profile.sections) if (s.kind !== "abstract") for (const n of sectionNames(s)) lookup.set(n, s.key);
     const out = [];
     infos.forEach((p, i) => {
       if (p.inTable) return;
@@ -848,7 +860,115 @@
     return items;
   }
 
+
+  /* ------------------------------------------------------------------ */
+  /*  Abstrak                                                            */
+  /* ------------------------------------------------------------------ */
+  function sliceRuns(runs, s, e) {
+    const out = []; let pos = 0;
+    for (const r of runs) {
+      const a = pos, b = pos + r.text.length; pos = b;
+      if (b <= s || a >= e) continue;
+      out.push(Object.assign({}, r, { text: r.text.slice(Math.max(s, a) - a, Math.min(e, b) - a) }));
+    }
+    return out;
+  }
+  const reEsc = (x) => x.replace(/[.*+?^${}()|[\]\\\/]/g, "\\$&");
+
+  /**
+   * Pecah tempelan abstrak menjadi komponen [{type:'abstract', label, sep, runs}].
+   * Label dikenali di awal paragraf ("Purpose: …", "Findings – …") atau di tengah paragraf setelah akhir kalimat.
+   */
+  function classifyAbstract(blocks, sec, profile) {
+    const A = profile.abstract || DEFAULT_PROFILE.abstract;
+    const labels = (A.labels || []).slice().sort((a, b) => b.length - a.length).map(reEsc).join("|");
+    const reStart = new RegExp(`^(${labels})\\s*([–—:]|-(?=\\s)|\\.(?=\\s))\\s*`, "iu");
+    const reMid = new RegExp(`(?<=[.!?)\\]”"])\\s+(${labels})\\s*([–—:]|\\s-\\s)\\s*`, "giu");
+    const items = [];
+    for (const bl of blocks) {
+      if (bl.kind === "table") continue;
+      let runs = bl.runs;
+      const text = plain(runs);
+      const t = text.trim();
+      if (!t) continue;
+      if (/^(abstract|abstrak)\s*[:.]?$/i.test(t)) { items.push({ type: "skip", runs, why: "judul" }); continue; }
+      if (/^(keywords?|kata kunci)\b/i.test(t)) { items.push({ type: "skip", runs, why: "keywords" }); continue; }
+      // titik potong: awal paragraf + label di tengah
+      const cuts = [];
+      const m0 = reStart.exec(text);
+      if (m0) cuts.push({ at: 0, len: m0[0].length, label: m0[1], sep: m0[2] });
+      let m;
+      reMid.lastIndex = 0;
+      while ((m = reMid.exec(text))) {
+        const at = m.index + (m[0].length - m[0].trimStart().length);
+        cuts.push({ at, len: m.index + m[0].length - at, label: m[1], sep: m[2].trim() });
+      }
+      if (!cuts.length) { items.push({ type: "abstract", label: null, runs: normalizeRuns(runs) }); continue; }
+      if (cuts[0].at > 0) items.push({ type: "abstract", label: null, runs: normalizeRuns(sliceRuns(runs, 0, cuts[0].at)) });
+      cuts.forEach((c, k) => {
+        const end = k + 1 < cuts.length ? cuts[k + 1].at : text.length;
+        const body = normalizeRuns(sliceRuns(runs, c.at + c.len, end));
+        items.push({ type: "abstract", label: c.label.trim(), sep: c.sep, runs: body });
+      });
+    }
+    return items.filter((it) => it.type !== "abstract" || plain(it.runs).trim() || it.label);
+  }
+
+  /** Paragraf keluaran abstrak: [[run…]] — run {br:true} = line break. */
+  function abstractParagraphs(items, profile) {
+    const A = profile.abstract || DEFAULT_PROFILE.abstract;
+    const det = profile.detect;
+    const comps = items.filter((i) => i.type === "abstract");
+    const body = (runs) => runs.map((r) => ({ text: r.text, b: false, i: !!A.italic || (det.keepItalic && !!r.i), sup: det.keepSupSub && !!r.sup, sub: det.keepSupSub && !!r.sub }));
+    const labelRun = (c) => {
+      const sep = A.labelSep ? A.labelSep : (c.sep === ":" || c.sep === "." ? c.sep + " " : " " + (c.sep || "–") + " ");
+      return { text: c.label + sep, b: !!A.labelBold, i: !!A.italic };
+    };
+    const paras = [];
+    let cur = null;
+    comps.forEach((c) => {
+      const runs = (c.label ? [labelRun(c)] : []).concat(body(c.runs));
+      if (c.label && A.joinLabeled === "linebreak") {
+        if (cur) cur.push({ br: true }); else { cur = []; paras.push(cur); }
+        cur.push(...runs);
+      } else { cur = null; paras.push(runs); }
+    });
+    return paras.map((p) => p.filter((r) => r.br || r.text));
+  }
+
+  /**
+   * Paragraf abstrak yang akan diganti.
+   * infos[j] = {text, inTable, row, cell}; h = indeks judul ABSTRACT.
+   * return {targets:[indeks…], after:null|indeks}
+   */
+  function pickAbstractTarget(infos, h) {
+    const H = infos[h];
+    let cand = [];
+    if (H.inTable) {
+      for (let j = h + 1; j < infos.length && infos[j].inTable; j++) if (infos[j].row === H.row && infos[j].cell === H.cell) cand.push(j);
+      if (!cand.length) for (let j = h + 1; j < infos.length && infos[j].inTable; j++) if (infos[j].row === H.row + 1 && infos[j].cell === H.cell) cand.push(j);
+      if (!cand.length) { const j = infos.findIndex((p, k) => k > h && p.inTable && countWords(p.text) >= 20); if (j > 0) cand.push(j); }
+    } else {
+      for (let j = h + 1; j < infos.length; j++) {
+        const t = (infos[j].text || "").trim();
+        if (/^(keywords?|kata kunci)\b/i.test(t) || infos[j].inTable) break;
+        const letters = t.replace(/[^\p{L}]/gu, "");
+        if (t && letters.length >= 4 && letters === letters.toUpperCase() && countWords(t) <= 8) break;
+        cand.push(j);
+        if (!t && cand.some((k) => (infos[k].text || "").trim())) { cand.pop(); break; }
+      }
+    }
+    const lic = cand.findIndex((j) => /open access|cc by|creative commons|licen[cs]e/i.test(infos[j].text || ""));
+    if (lic >= 0) cand = cand.slice(0, lic);
+    const filled = cand.filter((j) => (infos[j].text || "").trim());
+    if (!filled.length) return cand.length ? { targets: [cand[0]], after: null } : { targets: [], after: h };
+    return { targets: cand.slice(0, cand.indexOf(filled[filled.length - 1]) + 1), after: null };
+  }
+
+  const RE_ABSTRACT_HEAD = /^(abstract|abstrak)\s*[:.]?$/i;
+
   return {
+    classifyAbstract, abstractParagraphs, pickAbstractTarget, RE_ABSTRACT_HEAD,
     DEFAULT_PROFILE, PRESETS, presetFor, mergeProfile, clone,
     parseInput, parseHtml, parseText, classify, classifyReferences, classifyExisting,
     paraFormat, finalRuns, countWords, plain, normalizeRuns, titleCase, apaAutoItalic, linkUrls,
