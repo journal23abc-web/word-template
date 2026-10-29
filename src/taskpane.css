@@ -152,3 +152,25 @@ dialog textarea { width: 100%; height: 260px; font-family: ui-monospace, Consola
 #askTitle { font-weight: 600; font-size: 13.5px; line-height: 1.45; }
 .pill.ready.over { background: #fdecea; color: var(--bad); border-color: #f3c3bf; }
 .fgrid input.list { grid-column: 1 / -1; }
+
+/* cek kesesuaian */
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
+.chip { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
+.chip.error { color: var(--bad); border-color: #f3c3bf; background: #fdecea; }
+.chip.warn { color: var(--warn); border-color: #f0d9b5; background: #fff8ec; }
+.chip.ok { color: var(--ok); border-color: #bfe0cc; background: #eef8f2; }
+.cgroup { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 8px; overflow: hidden; }
+.cgroup h4 { margin: 0; font-size: 12.5px; padding: 8px 10px; border-bottom: 1px solid #eef0f3; display: flex; justify-content: space-between; }
+.cgroup h4 .cnt { font-weight: 400; color: var(--muted); font-size: 11.5px; }
+.finding { display: grid; grid-template-columns: 18px 1fr; gap: 6px; padding: 7px 10px; border-bottom: 1px solid #f1f3f5; font-size: 12px; }
+.finding:last-child { border-bottom: 0; }
+.finding .ic { font-weight: 700; text-align: center; line-height: 18px; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; }
+.finding.error .ic { background: var(--bad); color: #fff; }
+.finding.warn .ic { background: #e8a33b; color: #fff; }
+.finding.ok .ic { background: var(--ok); color: #fff; }
+.finding.info .ic { background: #d7dee6; color: #3b4652; }
+.finding .ft { font-weight: 600; }
+.finding.ok .ft { font-weight: 500; }
+.finding .fd { color: var(--muted); margin-top: 2px; word-break: break-word; }
+.parsed td { font-size: 11.5px; padding: 4px 10px; vertical-align: top; border-bottom: 1px solid #f1f3f5; }
+.parsed td:first-child { color: var(--muted); white-space: nowrap; }

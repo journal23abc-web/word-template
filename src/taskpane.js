@@ -89,8 +89,9 @@
   function initTabs() {
     document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
       document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === b));
-      ["paste", "words", "template"].forEach((k) => $("#tab-" + k).classList.toggle("hidden", k !== b.dataset.tab));
+      ["paste", "words", "check", "template"].forEach((k) => $("#tab-" + k).classList.toggle("hidden", k !== b.dataset.tab));
       if (b.dataset.tab === "words") recount();
+      if (b.dataset.tab === "check") renderCheckSettings();
     }));
   }
 
@@ -357,7 +358,7 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     setBusy(true);
     try {
       const r = await WordOps.reformatSection(key, state.profile);
-      toast(`✓ ${r.formatted} paragraf dirapikan (${r.headings} sub-heading).`, "ok");
+      toast(`✓ ${r.formatted} paragraf dirapikan (${r.headings} sub-heading${r.tables ? `, ${r.tables} tabel` : ""}).` + (r.tableErrors ? ` ${r.tableErrors} tabel gagal dirapikan (mungkin sel gabungan rumit).` : ""), r.tableErrors ? "err" : "ok", 5000);
     } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
   }
 
@@ -448,6 +449,78 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     T.innerHTML = card("Isi artikel (bagian yang dicentang)", c.total, c.limit, c.minLimit) + card("Abstrak", c.abstract, c.abstractLimit, 0);
     W.innerHTML = `<table class="wtable">${c.sections.map((s) => `<tr class="${s.counted ? "" : "nc"}"><td>${esc(s.title)}</td><td class="n">${fmtN(s.words)}</td></tr>`).join("")}</table>
       ${c.sections.length ? "" : '<p class="hint">Belum ada judul bagian yang dikenali di dokumen.</p>'}`;
+  }
+
+  /* ---------------- cek kesesuaian ---------------- */
+  function renderCheckSettings() {
+    const P = state.profile;
+    P.check = Object.assign({ maxMonths: 3, minDays: 0, requireRevised: true }, P.check || {});
+    P.journal = Object.assign({ name: "", abbrev: "" }, P.journal || {});
+    const host = $("#checkSettings");
+    host.innerHTML = `<fieldset class="limits"><details ${state.checkOpen ? "open" : ""}>
+      <summary>Aturan cek · ${esc(state.store.active.split(" (")[0])}</summary>
+      <div class="fgrid">
+        <label for="ck_journal" class="full">Nama jurnal (untuk dicocokkan dengan cite)</label>
+        <input type="text" id="ck_journal" class="full" value="${esc(P.journal.name)}">
+        <label for="ck_max">Maks. Received → Accepted (bulan)</label><input type="number" id="ck_max" min="0" step="1" value="${+P.check.maxMonths || 0}">
+        <label for="ck_min">Min. Received → Accepted (hari)</label><input type="number" id="ck_min" min="0" step="1" value="${+P.check.minDays || 0}">
+        <label for="ck_rev">Tanggal Revised wajib ada</label><input type="checkbox" id="ck_rev" ${P.check.requireRevised ? "checked" : ""}>
+        <div class="fdesc">0 bulan = jarak tidak dibatasi. Tersimpan untuk profil jurnal ini.</div>
+      </div></details></fieldset>`;
+    host.querySelector("details").addEventListener("toggle", (e) => { state.checkOpen = e.target.open; });
+    const save = () => {
+      P.journal.name = $("#ck_journal").value.trim();
+      P.check.maxMonths = Math.max(0, parseInt($("#ck_max").value, 10) || 0);
+      P.check.minDays = Math.max(0, parseInt($("#ck_min").value, 10) || 0);
+      P.check.requireRevised = $("#ck_rev").checked;
+      saveStore();
+      if (state.lastMeta) renderCheck(TplCheck.run(state.lastMeta, state.profile));
+    };
+    host.querySelectorAll("input").forEach((i) => i.addEventListener("change", save));
+  }
+
+  async function runCheck() {
+    if (!needWord()) return;
+    setBusy(true);
+    try {
+      state.lastMeta = await WordOps.collectMeta(state.profile);
+      renderCheck(TplCheck.run(state.lastMeta, state.profile));
+    } catch (e) { toast("Gagal memeriksa: " + errMsg(e), "err"); } finally { setBusy(false); }
+  }
+
+  function renderCheck(res) {
+    const F = res.findings;
+    const n = (l) => F.filter((f) => f.level === l).length;
+    $("#checkSummary").innerHTML = `<div class="chips">
+      <span class="chip error">✕ ${n("error")} perlu diperbaiki</span>
+      <span class="chip warn">⚠ ${n("warn")} perlu dicek</span>
+      <span class="chip ok">✓ ${n("ok")} sesuai</span></div>`;
+    const ICON = { ok: "✓", warn: "!", error: "✕", info: "i" };
+    const order = { error: 0, warn: 1, info: 2, ok: 3 };
+    const groups = [...new Set(F.map((f) => f.group))];
+    const p = res.parsed, c = p.cite || {};
+    const H = p.history || {};
+    const hd = (k) => (H[k] ? esc(H[k].text) + (H[k].date && !H[k].date.invalid ? ` <span class="of">(${TplCheck.fmtDate(H[k].date)})</span>` : "") : "—");
+    $("#checkResults").innerHTML = groups.map((g) => {
+      const list = F.filter((f) => f.group === g).sort((a, b) => order[a.level] - order[b.level]);
+      const bad = list.filter((f) => f.level === "error" || f.level === "warn").length;
+      return `<section class="cgroup"><h4>${esc(g)}<span class="cnt">${bad ? bad + " temuan" : "aman"}</span></h4>${list.map((f) =>
+        `<div class="finding ${f.level}"><span class="ic">${ICON[f.level]}</span><div><div class="ft">${esc(f.title)}</div>${f.detail ? `<div class="fd">${esc(f.detail)}</div>` : ""}</div></div>`).join("")}</section>`;
+    }).join("") + `<section class="cgroup"><details><summary style="padding:8px 10px;font-weight:600;font-size:12.5px;cursor:pointer">Data yang terbaca dari dokumen</summary>
+      <table class="parsed"><tbody>
+        <tr><td>Judul</td><td>${esc(p.title || "—")}</td></tr>
+        <tr><td>Penulis</td><td>${esc(p.authors.join("; ") || "—")}</td></tr>
+        <tr><td>Cite: penulis</td><td>${esc(c.authorsStr || "—")}</td></tr>
+        <tr><td>Cite: judul</td><td>${esc(c.title || "—")}</td></tr>
+        <tr><td>Cite: jurnal</td><td>${esc(c.journal || "—")}</td></tr>
+        <tr><td>Cite: vol(no), hlm</td><td>${esc((c.volume || "—") + "(" + (c.issue || "—") + "), " + (c.pageStart || "—") + "–" + (c.pageEnd || "—"))}</td></tr>
+        <tr><td>Cite: DOI</td><td>${esc(c.doi || "—")}</td></tr>
+        <tr><td>Header</td><td>${p.issue ? esc(`Vol. ${p.issue.volume}, No. ${p.issue.issue} ${p.issue.monthText || ""} ${p.issue.year || ""}`) : "—"}${p.headerDoi ? "<br>" + esc(p.headerDoi) : ""}</td></tr>
+        <tr><td>Halaman awal</td><td>${p.startPage || "tidak terbaca"}</td></tr>
+        <tr><td>Received</td><td>${hd("received")}</td></tr>
+        <tr><td>Revised</td><td>${hd("revised")}</td></tr>
+        <tr><td>Accepted</td><td>${hd("accepted")}</td></tr>
+      </tbody></table></details></section>`;
   }
 
   /* ---------------- editor template ---------------- */
@@ -720,6 +793,7 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     $("#undoLast").addEventListener("click", doUndo);
     $("#wipeAll").addEventListener("click", () => doWipe(state.profile.sections.filter((x) => x.kind !== "abstract").map((x) => x.key)));
     $("#recount").addEventListener("click", recount);
+    $("#runCheck").addEventListener("click", runCheck);
     if (inWord) refreshScan().then(renderSections);
   }
 

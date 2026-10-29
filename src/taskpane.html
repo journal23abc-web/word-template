@@ -22,6 +22,7 @@
   <nav class="tabs" role="tablist">
     <button role="tab" class="tab active" data-tab="paste">Tempel</button>
     <button role="tab" class="tab" data-tab="words">Hitung kata</button>
+    <button role="tab" class="tab" data-tab="check">Cek</button>
     <button role="tab" class="tab" data-tab="template">Template</button>
   </nav>
 
@@ -60,6 +61,17 @@
     <div id="limitSettings"></div>
     <div id="wordTotals"></div>
     <div id="wordTable"></div>
+  </main>
+
+  <!-- ============ CEK KESESUAIAN ============ -->
+  <main id="tab-check" class="panel hidden">
+    <div class="row-between">
+      <p class="hint m0">Cocokkan <i>To cite this article</i>, article history, header/footer, dan batas kata dengan isi artikel.</p>
+      <button class="btn small primary" id="runCheck">Periksa</button>
+    </div>
+    <div id="checkSettings"></div>
+    <div id="checkSummary"></div>
+    <div id="checkResults"></div>
   </main>
 
   <!-- ============ TEMPLATE ============ -->
@@ -103,6 +115,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="engine.js"></script>
+  <script src="check.js"></script>
   <script src="word-ops.js"></script>
   <script src="taskpane.js"></script>
 </body>

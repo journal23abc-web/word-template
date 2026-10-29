@@ -28,6 +28,8 @@
       countReferences: false, // referensi ikut dihitung?
       countTables: false,     // teks di dalam tabel ikut dihitung?
     },
+    journal: { name: "Artificial Intelligence in Educational Decision Sciences", abbrev: "AIEDS" },
+    check: { maxMonths: 3, minDays: 0, requireRevised: true },
     layout: {
       insertMode: "section",  // 'section' = di akhir bagian; 'cursor' = di posisi kursor
       blankBeforeSection: true, // sisakan 1 baris kosong sebelum judul bagian berikutnya
@@ -36,16 +38,17 @@
     h2:      { style: "Normal", size: 11, bold: true,  italic: false, align: "Justified", before: 3, after: 3, line: 1 },
     h3:      { style: "Normal", size: 11, bold: true,  italic: false, align: "Justified", before: 3, after: 3, line: 1 },
     body:    { style: "Normal", size: 11, align: "Justified", firstIndentCm: 0, before: 3, after: 3, line: 1 },
-    caption: { style: "Normal", size: 11, align: "Centered", labelBold: true, before: 3, after: 3, line: 1 },
+    caption: { style: "Normal", size: 11, figureSize: 11, align: "Centered", labelBold: true, stripTitleItalic: true, before: 3, after: 3, line: 1 },
     note:    { style: "Normal", size: 11, align: "Justified", labelItalic: false, before: 3, after: 4, line: 1 },
     abstract: {
       size: 10, align: "Left", before: 0, after: 0, line: 1, italic: false,
       labelBold: true,          // label abstrak terstruktur (Purpose – …) dibuat bold
+      sepBold: true,            // pemisah " – " ikut bold
       labelSep: " – ",          // pemisah label; kosong = pakai pemisah dari tempelan
       joinLabeled: "linebreak", // 'linebreak' = satu paragraf dipisah line break; 'paragraphs' = paragraf terpisah
       labels: ["Purpose", "Aim", "Aims", "Objective", "Objectives", "Background", "Design/methodology/approach", "Methodology", "Methods", "Method", "Design", "Approach",
-        "Findings", "Results", "Research limitations/implications", "Research limitations", "Limitations", "Practical implications", "Social implications", "Implications",
-        "Originality/value", "Originality", "Value", "Conclusion", "Conclusions", "Novelty", "Tujuan", "Metode", "Hasil", "Temuan", "Kesimpulan", "Keterbatasan", "Implikasi", "Orisinalitas", "Kebaruan"],
+        "Findings", "Results", "Research limitations/implications", "Research implications/limitations", "Research implications", "Research limitations", "Theoretical implications", "Managerial implications", "Policy implications", "Contribution", "Contributions", "Limitations", "Practical implications", "Social implications", "Implications",
+        "Originality/value", "Originality", "Value", "Conclusion", "Conclusions", "Novelty", "Tujuan", "Metode", "Hasil", "Temuan", "Kesimpulan", "Keterbatasan", "Keterbatasan penelitian", "Implikasi", "Implikasi penelitian", "Orisinalitas", "Kebaruan"],
     },
     quote:   { style: "Normal", size: 11, align: "Justified", leftCm: 1.27, rightCm: 0, italic: true, before: 3, after: 3, line: 1 },
     table:   { size: 10, headerBold: true, apaBorders: true, firstColLeft: true, cellAlign: "Centered" },
@@ -82,6 +85,7 @@
   /* Profil bawaan JEPSI — diturunkan dari naskah copyedit Banik & Roy (2026) */
   const JEPSD_PROFILE = (function () {
     const p = clone(DEFAULT_PROFILE);
+    p.journal = { name: "Journal of Education Psychology and Social Development", abbrev: "JEPSI" };
     p.name = "JEPSI (Journal of Education Psychology and Social Development)";
     p.base = "jepsi";
     const sp = { before: 0, after: 6, line: 1 };
@@ -98,8 +102,29 @@
     return p;
   })();
 
+  /* Profil bawaan VOICE — diturunkan dari naskah copyedit Kaharu, Umar & Waluyo (2026) */
+  const VOICE_PROFILE = (function () {
+    const p = clone(DEFAULT_PROFILE);
+    p.name = "VOICE (Journal of Vocational, Informatics and Computer Education)";
+    p.base = "voice";
+    p.journal = { name: "Journal of Vocational, Informatics and Computer Education", abbrev: "VOICE" };
+    const sp = { before: 6, after: 6, line: 1 };
+    Object.assign(p.sectionHeading, { size: 12 }, sp);
+    Object.assign(p.h2, sp); Object.assign(p.h3, sp);
+    Object.assign(p.body, sp);
+    Object.assign(p.caption, sp, { size: 10, figureSize: 11 });   // caption tabel 10 pt, gambar 11 pt
+    Object.assign(p.note, sp, { size: 10 });
+    Object.assign(p.quote, sp);
+    Object.assign(p.table, { size: 10, cellAlign: "Left" });
+    Object.assign(p.references, { before: 0, after: 4, line: 1, hangingCm: 0.83, autoItalic: false }); // daftar pustaka VOICE tanpa italic
+    Object.assign(p.abstract, { size: 10, align: "Justified", before: 0, after: 0, line: 1, labelSep: " – ", sepBold: false, joinLabeled: "paragraphs" });
+    const concl = p.sections.findIndex((x) => x.key === "concl");
+    p.sections.splice(concl + 1, 0, { key: "ack", title: "ACKNOWLEDGMENT", aliases: ["Acknowledgment", "Acknowledgement", "Acknowledgements", "ACKNOWLEDGEMENT", "Ucapan Terima Kasih"] });
+    return p;
+  })();
+
   /** Template bawaan (urutan = urutan di menu). */
-  const PRESETS = [DEFAULT_PROFILE, JEPSD_PROFILE];
+  const PRESETS = [DEFAULT_PROFILE, JEPSD_PROFILE, VOICE_PROFILE];
   const presetFor = (base) => PRESETS.find((x) => x.base === base) || DEFAULT_PROFILE;
 
   /** Gabungkan profil tersimpan dengan default (agar kunci baru tetap ada). */
@@ -421,6 +446,23 @@
   /*  Klasifikasi                                                        */
   /* ------------------------------------------------------------------ */
   const RE_CAPTION = /^(Table|Tables|Figure|Fig\.|Tabel|Gambar|Grafik|Chart|Diagram)\s+(\d+[A-Za-z]?|[IVX]+)\s*[.:]/i;
+  const RE_LABEL_ONLY = /^(Table|Tabel|Figure|Fig\.|Gambar|Grafik|Chart|Diagram)\s+(\d+[A-Za-z]?|[IVX]+)\s*[.:]?\s*$/i;
+  /** Caption gaya APA 7 dua baris ("Figure 1" lalu judul italic) -> satu caption "Figure 1. Judul". */
+  function mergeCaptionLabels(blocks) {
+    const out = [];
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i], n = blocks[i + 1];
+      const t = b.kind === "p" ? plain(b.runs).trim() : "";
+      if (t && RE_LABEL_ONLY.test(t) && n && n.kind === "p" && countWords(plain(n.runs)) <= 40 && !RE_CAPTION.test(plain(n.runs).trim())) {
+        const label = t.replace(/[.:]?\s*$/, ".");
+        out.push(Object.assign({}, n, { tag: "p", runs: normalizeRuns([{ text: label + " ", b: true }].concat(n.runs)), mergedCaption: true }));
+        i++;
+        continue;
+      }
+      out.push(b);
+    }
+    return out;
+  }
   const RE_NOTE = /^(Notes?|Catatan|Sumber|Source|Keterangan)\s*[.:]/i;
   const RE_CITATION = /\([^()]*\b(1[89]|20)\d{2}[a-z]?\b[^()]*\)|\bet al\./i;
   const RE_NUMBERED = /^((?:\d+\.)*\d+)\.?\s+(?=\S)|^([A-H]|[IVX]{1,4})[.)]\s+(?=\p{Lu})/u;
@@ -491,6 +533,7 @@
     const myNames = new Set(sectionNames(sec));
     const majors = new Set((sec.majorSubheadings || []).map(normHead));
     const items = [];
+    blocks = mergeCaptionLabels(blocks);
 
     for (let idx = 0; idx < blocks.length; idx++) {
       const bl = blocks[idx];
@@ -674,7 +717,12 @@
     switch (it.type) {
       case "section": c = P.sectionHeading; break;
       case "heading": c = it.level === 3 ? P.h3 : P.h2; break;
-      case "caption": c = P.caption; break;
+      case "caption": {
+        c = P.caption;
+        const isFig = /^(Figure|Fig\.|Gambar|Grafik|Chart|Diagram)\b/i.test(plain(it.runs || []).trim());
+        if (isFig && c.figureSize) c = Object.assign({}, c, { size: c.figureSize });
+        break;
+      }
       case "note": c = P.note; break;
       case "abstract": c = Object.assign({}, P.abstract || DEFAULT_PROFILE.abstract, { bold: false }); break;
       case "quote": c = P.quote || P.body; left = (c.leftCm || 0) * CM; break;
@@ -724,6 +772,14 @@
       const m = RE_CAPTION.exec(t);
       runs.forEach((r) => (r.b = false));
       if (m && profile.caption.labelBold) runs = patchRange(runs, 0, m[0].length, { b: true });
+      // Judul caption yang (hampir) seluruhnya italic — mis. gaya APA atau style "Caption" Word — dinormalkan
+      if (profile.caption.stripTitleItalic !== false) {
+        const start = m ? m[0].length : 0;
+        let all = 0, ital = 0, pos = 0;
+        runs.forEach((r) => { const a = pos, b = pos + r.text.length; pos = b; const n = Math.max(0, b - Math.max(a, start)); all += n; if (r.i) ital += n; });
+        if (m) runs = patchRange(runs, 0, m[0].length, { i: false });
+        if (all && ital / all >= 0.5) runs.forEach((r) => (r.i = false));
+      }
     }
     if (it.type === "note") {
       const m = RE_NOTE.exec(plain(runs));
@@ -884,6 +940,8 @@
     const labels = (A.labels || []).slice().sort((a, b) => b.length - a.length).map(reEsc).join("|");
     const reStart = new RegExp(`^(${labels})\\s*([–—:]|-(?=\\s)|\\.(?=\\s))\\s*`, "iu");
     const reMid = new RegExp(`(?<=[.!?)\\]”"])\\s+(${labels})\\s*([–—:]|\\s-\\s)\\s*`, "giu");
+    const reGeneric = /^([\p{Lu}][\p{L}\/&\- ]{2,40}?)\s+([–—])\s+(?=\S)/u;
+    const anyKnown = blocks.some((b) => b.kind === "p" && reStart.test(plain(b.runs).trim()));
     const items = [];
     for (const bl of blocks) {
       if (bl.kind === "table") continue;
@@ -895,8 +953,8 @@
       if (/^(keywords?|kata kunci)\b/i.test(t)) { items.push({ type: "skip", runs, why: "keywords" }); continue; }
       // titik potong: awal paragraf + label di tengah
       const cuts = [];
-      const m0 = reStart.exec(text);
-      if (m0) cuts.push({ at: 0, len: m0[0].length, label: m0[1], sep: m0[2] });
+      const m0 = reStart.exec(text) || (anyKnown && countWords(text) > 8 ? reGeneric.exec(text) : null);
+      if (m0 && countWords(m0[1]) <= 5) cuts.push({ at: 0, len: m0[0].length, label: m0[1], sep: m0[2] });
       let m;
       reMid.lastIndex = 0;
       while ((m = reMid.exec(text))) {
@@ -924,10 +982,15 @@
       const sep = A.labelSep ? A.labelSep : (c.sep === ":" || c.sep === "." ? c.sep + " " : " " + (c.sep || "–") + " ");
       return { text: c.label + sep, b: !!A.labelBold, i: !!A.italic };
     };
+    const labelRuns = (c) => {
+      const r = labelRun(c);
+      if (A.sepBold !== false || !r.b) return [r];
+      return [{ text: c.label, b: true, i: r.i }, { text: r.text.slice(c.label.length), b: false, i: r.i }];
+    };
     const paras = [];
     let cur = null;
     comps.forEach((c) => {
-      const runs = (c.label ? [labelRun(c)] : []).concat(body(c.runs));
+      const runs = (c.label ? labelRuns(c) : []).concat(body(c.runs));
       if (c.label && A.joinLabeled === "linebreak") {
         if (cur) cur.push({ br: true }); else { cur = []; paras.push(cur); }
         cur.push(...runs);
@@ -945,8 +1008,16 @@
     const H = infos[h];
     let cand = [];
     if (H.inTable) {
-      for (let j = h + 1; j < infos.length && infos[j].inTable; j++) if (infos[j].row === H.row && infos[j].cell === H.cell) cand.push(j);
-      if (!cand.length) for (let j = h + 1; j < infos.length && infos[j].inTable; j++) if (infos[j].row === H.row + 1 && infos[j].cell === H.cell) cand.push(j);
+      // batas tabel: urutan (baris, sel) mundur = sudah masuk tabel lain
+      let end = h + 1, pr = H.row, pc = H.cell;
+      while (end < infos.length && infos[end].inTable) {
+        const r = infos[end].row, c = infos[end].cell;
+        if (r != null && (r < pr || (r === pr && c < pc))) break;
+        if (r != null) { pr = r; pc = c; }
+        end++;
+      }
+      for (let j = h + 1; j < end; j++) if (infos[j].row === H.row && infos[j].cell === H.cell) cand.push(j);
+      if (!cand.length) for (let j = h + 1; j < end; j++) if (infos[j].row === H.row + 1 && infos[j].cell === H.cell) cand.push(j);
       if (!cand.length) { const j = infos.findIndex((p, k) => k > h && p.inTable && countWords(p.text) >= 20); if (j > 0) cand.push(j); }
     } else {
       for (let j = h + 1; j < infos.length; j++) {

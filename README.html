@@ -1,14 +1,15 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Template Paste</title><style>body{font-family:Segoe UI,system-ui,sans-serif;max-width:760px;margin:24px auto;padding:0 16px;line-height:1.55;color:#1d232b}code,pre{background:#f2f4f7;border-radius:4px}pre{padding:10px;overflow:auto}code{padding:1px 4px}table{border-collapse:collapse;font-size:14px}td,th{border:1px solid #dde1e6;padding:4px 8px;text-align:left}</style></head><body><h1>Template Paste — Add-in Word</h1>
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Template Paste</title><style>body{font-family:Segoe UI,system-ui,sans-serif;max-width:860px;margin:24px auto;padding:0 16px;line-height:1.55;color:#1d232b}code,pre{background:#f2f4f7;border-radius:4px}pre{padding:10px;overflow:auto}code{padding:1px 4px}table{border-collapse:collapse;font-size:14px}td,th{border:1px solid #dde1e6;padding:4px 8px;text-align:left}</style></head><body><h1>Template Paste — Add-in Word</h1>
 <p>Tempel isi artikel per bagian (Introduction, Method, Results and Discussion, Conclusion, References, …), lalu add-in menyesuaikan formatnya dengan template jurnal secara otomatis:</p>
 <ul>
 <li><strong>Font, ukuran, perataan, spasi sebelum/sesudah, spasi baris</strong> untuk tiap jenis paragraf</li>
 <li><strong>Deteksi sub-heading otomatis</strong> (kalimat pendek tanpa titik, teks bold, heading dari Google Docs/ChatGPT, heading bernomor seperti <code>2.1</code>) → dibuat bold sesuai template. Di Results and Discussion, <em>Results</em> dan <em>Discussion</em> jadi tingkat 2, sub-judul di bawahnya tingkat 3</li>
 <li><strong>Referensi</strong>: hanging indent 1,27 cm, italic otomatis gaya APA (nama jurnal + volume, atau judul buku) bila tempelan tidak membawa italic, DOI jadi hyperlink, baris terputus dari PDF disambung</li>
-<li><strong>Caption</strong> (<code>Table 1.</code> / <code>Figure 1.</code> → label bold, judul normal), <strong>Note.</strong>, dan <strong>tabel</strong> yang ditempel (garis gaya APA, font 10 pt)</li>
+<li><strong>Caption</strong> (<code>Table 1.</code> / <code>Figure 1.</code> → label bold, judul normal; caption gaya APA dua baris "Figure 1" + judul italic otomatis digabung, dan italic pada judul caption dihilangkan), <strong>Note.</strong>, dan <strong>tabel</strong> yang ditempel (garis gaya APA, font 10 pt)</li>
 <li><strong>Menambah, bukan mengganti</strong>: isi masuk di bawah konten yang sudah ada pada bagian itu. Bila judul bagian belum ada, judulnya dibuat di urutan yang benar</li>
 <li><strong>Abstrak</strong>: kartu ABSTRACT mengganti teks di kotak abstrak (bukan menambah). AIEDS memakai format terstruktur: <em>Purpose – / Methodology – / Findings – / Research limitations – / Originality –</em>. Label dikenali otomatis dari tempelan (juga <em>Design/methodology/approach:</em>, <em>Tujuan:</em>, dll.), dibuat <strong>bold</strong>, pemisahnya diseragamkan menjadi " – ", dan komponennya disatukan dalam satu paragraf yang dipisah <em>line break</em>, 10 pt rata kiri. JEPSI memakai satu paragraf 9 pt justify. Baris <em>Keywords</em> di tempelan dilewati. Abstrak lama bisa dikembalikan, dan jumlah kata dibandingkan dengan batas abstrak jurnal</li>
+<li><strong>Cek kesesuaian</strong> (tab <strong>Cek</strong>): mencocokkan <em>To cite this article</em>, baik di badan dokumen, tabel, maupun footer, dengan artikelnya. Yang dicek: penulis (nama, urutan, inisial), judul, nama jurnal, volume/nomor, tahun, halaman (dibandingkan dengan nomor halaman awal dokumen), DOI (format, kelengkapan, kecocokan vX iY dan DOI di header), serta tanda baca (titik ganda, spasi ganda, placeholder). Juga memeriksa <strong>article history</strong>: tanggal terbaca dan valid, urutan Received ≤ Revised ≤ Accepted, dan jarak Received → Accepted <strong>maks. 3 bulan</strong> (bisa diubah per jurnal), tidak melewati bulan terbit, serta tanggal di masa depan. Selain itu memeriksa header/footer (placeholder "Author", "Title…", "XXXX"; running head penulis dan judul; nama jurnal) dan batas kata</li>
 <li><strong>Hapus isi bagian</strong>: kosongkan seluruh isi satu bagian di dokumen (atau semua bagian sekaligus) dengan judul bagian tetap ada, misalnya untuk mengganti Introduction dengan versi baru. Ada konfirmasi dan tombol <strong>Kembalikan isi yang dihapus</strong> (selama panel masih terbuka), dan Ctrl+Z tetap bisa dipakai</li>
-<li><strong>Rapikan isi yang ada</strong>: terapkan format template ke paragraf yang sudah terlanjur ditempel manual (italic tidak diubah)</li>
+<li><strong>Rapikan isi yang ada</strong>: terapkan format template ke paragraf yang sudah terlanjur ditempel manual (italic tidak diubah), <strong>termasuk tabel</strong> di bagian itu: garis vertikal dihapus, garis gaya APA (atas, bawah judul kolom, bawah tabel), font &amp; ukuran tabel, judul kolom bold, perataan sel</li>
 <li><strong>Kutipan langsung</strong> (mis. kutipan wawancara “…” Guru, S1) dikenali dan dibuat menjorok + italic</li>
 <li><strong>Hitung kata</strong> per bagian dan total terhadap batas jurnal (aturan bisa diatur per jurnal), plus abstrak</li>
 <li><strong>Profil template</strong>: semua angka bisa diubah, dan profil bisa diduplikat untuk jurnal lain (ekspor/impor JSON)</li>
@@ -20,6 +21,7 @@
 <th></th>
 <th>AIEDS</th>
 <th>JEPSI</th>
+<th>VOICE</th>
 </tr>
 </thead>
 <tbody>
@@ -27,34 +29,41 @@
 <td>Font</td>
 <td>Cambria</td>
 <td>Cambria</td>
+<td>Cambria</td>
 </tr>
 <tr>
 <td>Judul bagian</td>
 <td>12 pt bold KAPITAL, tengah, sesudah 6 pt</td>
 <td>11 pt bold KAPITAL, tengah, sesudah 6 pt</td>
+<td>12 pt bold KAPITAL, tengah, 6/6 pt</td>
 </tr>
 <tr>
 <td>Sub-heading</td>
 <td>11 pt bold, 3/3 pt</td>
 <td>11 pt bold, 0/6 pt</td>
+<td>11 pt bold, 6/6 pt</td>
 </tr>
 <tr>
 <td>Isi</td>
 <td>11 pt justify, 3/3 pt, spasi tunggal</td>
 <td>11 pt justify, 0/6 pt, spasi tunggal</td>
+<td>11 pt justify, 6/6 pt</td>
 </tr>
 <tr>
 <td>Caption / Note.</td>
 <td>label bold / Note. tegak</td>
 <td>label bold / <em>Note.</em> italic</td>
+<td>label bold; tabel 10 pt, gambar 11 pt</td>
 </tr>
 <tr>
 <td>Abstrak</td>
 <td>terstruktur, label bold " – ", 10 pt rata kiri, 1 paragraf dengan line break</td>
 <td>1 paragraf, 9 pt justify, sesudah 8 pt, spasi 1,08</td>
+<td>terstruktur, paragraf terpisah, hanya label bold, 10 pt justify</td>
 </tr>
 <tr>
 <td>Kutipan langsung</td>
+<td>menjorok 1,27 cm, italic</td>
 <td>menjorok 1,27 cm, italic</td>
 <td>menjorok 1,27 cm, italic</td>
 </tr>
@@ -62,11 +71,13 @@
 <td>Tabel</td>
 <td>10 pt, garis APA, isi rata tengah</td>
 <td>10 pt, garis APA, isi rata kiri</td>
+<td>10 pt, garis APA, isi rata kiri</td>
 </tr>
 <tr>
 <td>Referensi</td>
 <td>11 pt, hanging 1,27 cm, sesudah 6 pt</td>
 <td>11 pt, hanging 1,27 cm, sesudah 6 pt</td>
+<td>11 pt, hanging 0,83 cm, sesudah 4 pt, tanpa italic</td>
 </tr>
 </tbody>
 </table>

@@ -79,24 +79,40 @@
   }
 
   /** Format tabel APA (dipanggil setelah sync agar paragraf sel bisa dimuat). */
-  function formatTable(t, rowsCount, profile) {
+  /**
+   * Format tabel sesuai template (dipanggil setelah t.paras & t.rows dimuat).
+   * opts.existing = tabel yang sudah ada di dokumen (italic di sel dipertahankan).
+   */
+  function formatTable(t, profile, opts) {
+    opts = opts || {};
     const T = profile.table;
+    const line = (b, on) => { if (on) { b.type = "Single"; b.width = 0.5; b.color = "#000000"; } else b.type = "None"; };
     t.paras.items.forEach((p) => {
       p.styleBuiltIn = "Normal";
-      p.spaceBefore = 0; p.spaceAfter = 0; p.lineSpacing = 12; p.firstLineIndent = 0; p.leftIndent = 0;
+      p.spaceBefore = 0; p.spaceAfter = 0; p.lineSpacing = 12; p.firstLineIndent = 0; p.leftIndent = 0; p.rightIndent = 0;
     });
     const tbl = t.table;
-    tbl.font.set({ name: profile.font, size: T.size, bold: false, italic: false, color: profile.color });
+    const f = { name: profile.font, size: T.size, bold: false, color: profile.color, highlightColor: null };
+    if (!opts.existing) f.italic = false;
+    tbl.font.set(f);
     tbl.headerRowCount = 1;
+    const rows = t.rows.items, n = rows.length;
     if (T.apaBorders) {
-      ["Left", "Right", "InsideHorizontal", "InsideVertical"].forEach((loc) => { tbl.getBorder(loc).type = "None"; });
-      ["Top", "Bottom"].forEach((loc) => { const b = tbl.getBorder(loc); b.type = "Single"; b.width = 0.5; b.color = "#000000"; });
+      ["Left", "Right", "InsideHorizontal", "InsideVertical"].forEach((loc) => line(tbl.getBorder(loc), false));
+      ["Top", "Bottom"].forEach((loc) => line(tbl.getBorder(loc), true));
+      // garis per baris — menimpa garis yang dipasang per sel (umum di naskah hasil konversi)
+      rows.forEach((row, r) => {
+        ["Left", "Right", "InsideVertical"].forEach((loc) => line(row.getBorder(loc), false));
+        if (r === 0) { line(row.getBorder("Top"), true); line(row.getBorder("Bottom"), true); }
+        else {
+          if (r >= 2) line(row.getBorder("Top"), false);
+          line(row.getBorder("Bottom"), r === n - 1);
+        }
+      });
     }
-    const head = tbl.rows.getFirst();
-    head.font.bold = !!T.headerBold;
-    if (T.apaBorders) { const hb = head.getBorder("Bottom"); hb.type = "Single"; hb.width = 0.5; hb.color = "#000000"; }
+    if (rows[0]) rows[0].font.bold = !!T.headerBold;
     tbl.horizontalAlignment = T.cellAlign || "Centered";
-    if (T.firstColLeft) for (let r = 0; r < rowsCount; r++) tbl.getCell(r, 0).horizontalAlignment = "Left";
+    if (T.firstColLeft) rows.forEach((row) => { row.cells.getFirst().horizontalAlignment = "Left"; });
   }
 
   /**
@@ -120,7 +136,7 @@
           first = first || host; last = host;
         }
         const tbl = host.insertTable(vals.length, vals[0].length, hostLoc, vals);
-        tables.push({ table: tbl, rows: vals.length });
+        tables.push({ table: tbl });
         first = first || tbl; last = tbl; cursor = tbl; cursorIsTable = true; loc = "After"; count++;
       } else {
         const p = cursor.insertParagraph("", loc);
@@ -131,9 +147,9 @@
     }
     await context.sync();
     if (tables.length) {
-      for (const t of tables) { t.paras = t.table.getRange("Whole").paragraphs; t.paras.load("items"); }
+      for (const t of tables) { t.paras = t.table.getRange("Whole").paragraphs; t.paras.load("items"); t.rows = t.table.rows; t.rows.load("items"); }
       await context.sync();
-      for (const t of tables) formatTable(t, t.rows, profile);
+      for (const t of tables) formatTable(t, profile);
       await context.sync();
     }
     return { first, last, count, endsWithTable: cursorIsTable };
@@ -142,9 +158,9 @@
   /* ---------------- membaca struktur dokumen ---------------- */
   async function readStructure(context, profile, withBold) {
     const paras = context.document.body.paragraphs;
-    paras.load(withBold ? "items/text,items/tableNestingLevel,items/font/bold" : "items/text,items/tableNestingLevel");
+    paras.load(withBold ? "items/text,items/tableNestingLevel,items/font/bold,items/font/italic" : "items/text,items/tableNestingLevel");
     await context.sync();
-    const infos = paras.items.map((p) => ({ text: p.text, inTable: p.tableNestingLevel > 0, bold: withBold ? p.font.bold : undefined }));
+    const infos = paras.items.map((p) => ({ text: p.text, inTable: p.tableNestingLevel > 0, level: p.tableNestingLevel, bold: withBold ? p.font.bold : undefined, italic: withBold ? p.font.italic : undefined }));
     const heads = E.findSectionHeadings(infos, profile);
     return { paras: paras.items, infos, heads };
   }
@@ -289,15 +305,45 @@
       idx.forEach((j, k) => {
         const it = items[k];
         if (!it || it.type === "skip") return;
-        applyExisting(paras[j], it, profile, infos[j].bold);
+        applyExisting(paras[j], it, profile, infos[j].bold, infos[j].italic);
         n++;
       });
       await context.sync();
-      return { formatted: n, headings: items.filter((i) => i && i.type === "heading").length };
+
+      // tabel di bagian ini: paragraf pertama tiap tabel = sel (0,0) yang bukan lanjutan sel (0,0) sebelumnya
+      const probe = [];
+      for (let j = range.start + 1; j < range.end; j++) {
+        if (!infos[j].inTable || infos[j].level !== 1) continue;
+        const c = paras[j].parentTableCellOrNullObject; c.load("rowIndex,cellIndex"); probe.push([j, c]);
+      }
+      if (probe.length) await context.sync();
+      const starts = [];
+      probe.forEach(([j, c], k) => {
+        if (c.isNullObject || c.rowIndex !== 0 || c.cellIndex !== 0) return;
+        const prev = probe[k - 1];
+        const cont = prev && prev[0] === j - 1 && !prev[1].isNullObject && prev[1].rowIndex === 0 && prev[1].cellIndex === 0;
+        if (!cont) starts.push(j);
+      });
+      let tablesDone = 0, tableErrors = 0;
+      for (const j of starts) {
+        try {
+          const tbl = paras[j].parentTableOrNullObject;
+          tbl.load("rowCount");
+          await context.sync();
+          if (tbl.isNullObject) continue;
+          const t = { table: tbl, paras: tbl.getRange("Whole").paragraphs, rows: tbl.rows };
+          t.paras.load("items"); t.rows.load("items");
+          await context.sync();
+          formatTable(t, profile, { existing: true });
+          await context.sync();
+          tablesDone++;
+        } catch (e) { tableErrors++; console.warn("tabel gagal dirapikan", e); }
+      }
+      return { formatted: n, headings: items.filter((i) => i && i.type === "heading").length, tables: tablesDone, tableErrors };
     });
   }
 
-  function applyExisting(p, it, profile, curBold) {
+  function applyExisting(p, it, profile, curBold, curItalic) {
     const f = E.paraFormat(it, profile);
     p.alignment = f.align;
     p.spaceBefore = f.before;
@@ -313,7 +359,10 @@
       if (f.italic) p.font.italic = true;
     } else if (it.type === "quote" && f.italic) {
       p.font.italic = true;
-    } else if (curBold === true && it.type !== "caption") {
+    } else if (it.type === "caption") {
+      // caption: label tetap, judul jangan italic (bila seluruh paragraf italic)
+      if (profile.caption.stripTitleItalic !== false && curItalic === true) p.font.italic = false;
+    } else if (curBold === true) {
       p.font.bold = false; // paragraf seluruhnya bold karena gaya template -> normalkan
     }
   }
@@ -485,6 +534,39 @@
     });
   }
 
+  /** Kumpulkan data untuk Cek kesesuaian: badan dokumen, semua header/footer, halaman awal. */
+  async function collectMeta(profile) {
+    return Word.run(async (context) => {
+      const { paras, infos } = await readStructure(context, profile);
+      const secs = context.document.sections;
+      secs.load("items");
+      await context.sync();
+      const parts = [];
+      secs.items.forEach((sct, si) => {
+        ["FirstPage", "Primary", "EvenPages"].forEach((type) => {
+          for (const kind of ["header", "footer"]) {
+            const body = kind === "header" ? sct.getHeader(type) : sct.getFooter(type);
+            const ps = body.paragraphs;
+            ps.load("items/text");
+            parts.push({ kind, type, section: si, ps });
+          }
+        });
+      });
+      await context.sync();
+      const hf = parts.map((x) => ({ kind: x.kind, type: x.type, section: x.section, text: x.ps.items.map((p) => p.text).join("\n") }))
+        .filter((x) => x.text.trim());
+      // nomor halaman awal (w:pgNumType w:start) — dari OOXML paragraf terakhir; abaikan bila tidak tersedia
+      let startPage = null;
+      try {
+        const ox = paras[paras.length - 1].getRange("Whole").getOoxml();
+        await context.sync();
+        const m = /<w:pgNumType[^>]*w:start="(\d+)"/.exec(ox.value);
+        if (m) startPage = +m[1];
+      } catch (e) { /* tidak didukung */ }
+      return { infos, hf, startPage };
+    });
+  }
+
   async function countWords(profile) {
     return Word.run(async (context) => {
       const { infos, heads } = await readStructure(context, profile);
@@ -506,5 +588,5 @@
     });
   }
 
-  root.WordOps = { scan, insertSection, reformatSection, clearSection, restoreSection, insertAbstract, clearAbstract, restoreAbstract, countWords, undoLast, _internal: { insertItems, formatNewParagraph, setStyle } };
+  root.WordOps = { collectMeta, scan, insertSection, reformatSection, clearSection, restoreSection, insertAbstract, clearAbstract, restoreAbstract, countWords, undoLast, _internal: { insertItems, formatNewParagraph, setStyle } };
 })(typeof self !== "undefined" ? self : this);
