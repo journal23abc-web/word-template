@@ -98,3 +98,20 @@ assets/               ikon
 ```
 
 Kebutuhan: Word 2016 ke atas / Microsoft 365 / Word Mac / Word web. Fitur "Hapus sisipan terakhir" butuh WordApi 1.4 (Microsoft 365 / Word 2021).
+
+## 6. Catatan versi
+
+**v6.1:**
+- Perbaikan error *GeneralException (TableCell.cellIndex)* saat mengganti/mengosongkan abstrak di tabel yang punya sel gabungan (template JEPSI). Add-in tidak lagi memakai nomor baris/kolom sel; sel abstrak dikenali dari isinya.
+- Rapikan tabel juga tidak lagi memakai nomor sel, jadi aman untuk tabel bersel gabungan.
+
+**v6 (perbaikan bug):**
+- Abstrak yang disalin dari dalam tabel (seperti di template JEPSI/AIEDS/VOICE) sekarang terbaca. Kalau seluruh tabel halaman depan ikut tersalin, *Article info*, *Keywords* beserta butirnya, *Article history*, *cite*, dan lisensi otomatis dilewati.
+- Mengganti abstrak yang terdiri dari beberapa paragraf (VOICE) memakai ulang paragraf yang ada, sehingga tidak error di sel tabel dan latar warnanya terjaga.
+- Hitung kata abstrak tidak lagi ikut menghitung teks *To cite this article* (JEPSI).
+- Panel tetap aktif walaupun Word lambat siap saat pertama dibuka.
+- Kompatibel dengan Word for Mac versi lama (tanpa regex *lookbehind*).
+- Rapikan: label caption ("Table 1.") dibold, baris persamaan "(1)" tidak diubah.
+- Menyisipkan setelah daftar bernomor/berpoin tidak membuat isi baru ikut bernomor.
+- Catatan kaki/komentar dari clipboard Word tidak ikut tertempel.
+- "Figure 1" yang berdiri sendiri dikenali sebagai caption, bukan sub-heading.

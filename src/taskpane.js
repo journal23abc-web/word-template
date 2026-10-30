@@ -799,8 +799,17 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
 
   if (typeof Office !== "undefined" && Office.onReady) {
     let booted = false;
-    Office.onReady((info) => { if (booted) return; booted = true; boot(info && info.host === Office.HostType.Word); });
-    // di luar Office, onReady kadang tidak terpanggil
+    Office.onReady((info) => {
+      const inWord = !!(info && info.host === Office.HostType.Word);
+      if (!booted) { booted = true; boot(inWord); return; }
+      // Word terlambat siap (mis. > 2,5 detik saat pertama dibuka): aktifkan mode Word
+      if (inWord && !state.inWord) {
+        state.inWord = true;
+        $("#notInWord").classList.add("hidden");
+        refreshScan().then(renderSections);
+      }
+    });
+    // di luar Office, onReady kadang tidak terpanggil — tampilkan pratinjau, tetapi tetap tunggu Word
     setTimeout(() => { if (!booted) { booted = true; boot(false); } }, 2500);
   } else {
     document.addEventListener("DOMContentLoaded", () => boot(false));

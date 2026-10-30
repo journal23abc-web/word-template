@@ -119,8 +119,9 @@
    * Sisipkan items berurutan mulai dari `start` (Paragraph) di lokasi `loc` ('After'|'Before').
    * return {first, last, count, tables}
    */
-  async function insertItems(context, start, loc, items, profile) {
-    let cursor = start, cursorIsTable = false;
+  async function insertItems(context, start, loc, items, profile, opts) {
+    opts = opts || {};
+    let cursor = start, cursorIsTable = false, detachNext = !!opts.anchorIsList;
     let first = null, last = null, count = 0, sinceSync = 0;
     const tables = [];
     for (const it of items) {
@@ -140,6 +141,7 @@
         first = first || tbl; last = tbl; cursor = tbl; cursorIsTable = true; loc = "After"; count++;
       } else {
         const p = cursor.insertParagraph("", loc);
+        if (detachNext) { p.detachFromList(); detachNext = false; } // jangan ikut jadi daftar bernomor
         formatNewParagraph(p, it, profile);
         first = first || p; last = p; cursor = p; cursorIsTable = false; loc = "After"; count++;
       }
@@ -266,7 +268,9 @@
         }
       }
 
-      const res = await insertItems(context, start, loc, items, profile);
+      let anchorIsList = false;
+      try { start.load("isListItem"); await context.sync(); anchorIsList = !!start.isListItem; } catch (e) { anchorIsList = false; }
+      const res = await insertItems(context, start, loc, items, profile, { anchorIsList });
       let last = res.last;
       if (res.count && needTrailingBlank) {
         const blank = last.insertParagraph("", "After");
@@ -305,39 +309,44 @@
       idx.forEach((j, k) => {
         const it = items[k];
         if (!it || it.type === "skip") return;
+        const t = (infos[j].text || "").trim();
+        // baris persamaan "… (1)" / nomor saja / paragraf gambar: jangan diubah perataannya
+        if (/\t/.test(infos[j].text || "") && /\(\d+[a-z]?\)\s*$/.test(t)) return;
+        if (t.replace(/[^\p{L}]/gu, "").length < 2) return;
         applyExisting(paras[j], it, profile, infos[j].bold, infos[j].italic);
+        if (it.type === "caption") {
+          const m = /^(Table|Tables|Figure|Fig\.|Tabel|Gambar|Grafik|Chart|Diagram)\s+(\d+[A-Za-z]?|[IVX]+)\s*[.:]?/i.exec(t);
+          if (m && profile.caption.labelBold) {
+            const hit = paras[j].search(m[0], { matchCase: true }).getFirstOrNullObject();
+            hit.font.bold = true;
+          }
+        }
         n++;
       });
       await context.sync();
 
-      // tabel di bagian ini: paragraf pertama tiap tabel = sel (0,0) yang bukan lanjutan sel (0,0) sebelumnya
-      const probe = [];
-      for (let j = range.start + 1; j < range.end; j++) {
-        if (!infos[j].inTable || infos[j].level !== 1) continue;
-        const c = paras[j].parentTableCellOrNullObject; c.load("rowIndex,cellIndex"); probe.push([j, c]);
-      }
-      if (probe.length) await context.sync();
-      const starts = [];
-      probe.forEach(([j, c], k) => {
-        if (c.isNullObject || c.rowIndex !== 0 || c.cellIndex !== 0) return;
-        const prev = probe[k - 1];
-        const cont = prev && prev[0] === j - 1 && !prev[1].isNullObject && prev[1].rowIndex === 0 && prev[1].cellIndex === 0;
-        if (!cont) starts.push(j);
-      });
+      // tabel di bagian ini — jalan dari paragraf tabel pertama, lompati seluruh paragraf tabel itu
       let tablesDone = 0, tableErrors = 0;
-      for (const j of starts) {
+      for (let j = range.start + 1; j < range.end; ) {
+        if (!infos[j].inTable) { j++; continue; }
+        let next = j + 1;
         try {
           const tbl = paras[j].parentTableOrNullObject;
-          tbl.load("rowCount");
+          const tps = tbl.getRange("Whole").paragraphs;
+          tps.load("items");
           await context.sync();
-          if (tbl.isNullObject) continue;
-          const t = { table: tbl, paras: tbl.getRange("Whole").paragraphs, rows: tbl.rows };
-          t.paras.load("items"); t.rows.load("items");
+          next = j + Math.max(1, tps.items.length);
+          const t = { table: tbl, paras: tps, rows: tbl.rows };
+          t.rows.load("items");
           await context.sync();
           formatTable(t, profile, { existing: true });
           await context.sync();
           tablesDone++;
-        } catch (e) { tableErrors++; console.warn("tabel gagal dirapikan", e); }
+        } catch (e) {
+          tableErrors++; console.warn("tabel gagal dirapikan", e);
+          while (next < range.end && infos[next].inTable) next++;
+        }
+        j = next;
       }
       return { formatted: n, headings: items.filter((i) => i && i.type === "heading").length, tables: tablesDone, tableErrors };
     });
@@ -360,7 +369,8 @@
     } else if (it.type === "quote" && f.italic) {
       p.font.italic = true;
     } else if (it.type === "caption") {
-      // caption: label tetap, judul jangan italic (bila seluruh paragraf italic)
+      // caption: judul tidak bold/italic (label "Table 1." dibold terpisah)
+      if (curBold === true) p.font.bold = false;
       if (profile.caption.stripTitleItalic !== false && curItalic === true) p.font.italic = false;
     } else if (curBold === true) {
       p.font.bold = false; // paragraf seluruhnya bold karena gaya template -> normalkan
@@ -421,23 +431,70 @@
     });
   }
 
+  /* ---------------- sel & tabel tanpa rowIndex/cellIndex ----------------
+   * Word melempar GeneralException untuk TableCell.rowIndex/cellIndex pada tabel
+   * dengan sel gabungan. Jadi posisi sel dihitung dari isi TableCell.body.
+   */
+  async function cellRange(context, paras, infos, j) {
+    const cell = paras[j].parentTableCellOrNullObject;
+    const ps = cell.body.paragraphs;
+    ps.load("items/text");
+    await context.sync();
+    const texts = ps.items.map((p) => p.text);
+    // posisi paragraf j di dalam selnya: cocokkan urutan teks di sekitar j
+    let best = -1;
+    for (let k = 0; k < texts.length; k++) {
+      const start = j - k;
+      if (start < 0) break;
+      let okAll = true;
+      for (let q = 0; q < texts.length; q++) { const g = infos[start + q]; if (!g || g.text !== texts[q]) { okAll = false; break; } }
+      if (okAll) { best = start; break; }
+    }
+    if (best < 0) throw new Error("Posisi sel tidak dapat ditentukan.");
+    return { start: best, end: best + texts.length };
+  }
+
   /* ---------------- abstrak ---------------- */
   async function locateAbstract(context, profile) {
     const { paras, infos, heads } = await readStructure(context, profile);
     const h = infos.findIndex((p) => E.RE_ABSTRACT_HEAD.test((p.text || "").trim()));
     if (h < 0) return null;
-    const win = [];
-    for (let j = h; j < Math.min(infos.length, h + 80); j++) {
-      if (!infos[j].inTable) { if (j > h) break; continue; }
-      const c = paras[j].parentTableCellOrNullObject;
-      c.load("rowIndex,cellIndex");
-      win.push([j, c]);
+    if (!infos[h].inTable) return { paras, infos, heads, h, pick: E.pickAbstractTarget(infos, h) };
+    let tblEnd = h + 1;
+    while (tblEnd < infos.length && infos[tblEnd].inTable) tblEnd++;
+    try {
+      const hc = await cellRange(context, paras, infos, h);
+      let pick = null;
+      if (hc.end - h > 1) pick = E.abstractTargetsInCell(infos, h, hc.start, hc.end);          // abstrak di sel yang sama (AIEDS, VOICE)
+      if (!pick || !pick.targets.some((j) => (infos[j].text || "").trim())) {
+        // sel lain: sel pertama setelah judul yang berisi paragraf panjang (bukan keywords/history/cite)
+        const j = infos.findIndex((p, q) => q >= hc.end && q < tblEnd && E.countWords(p.text) >= 20 && !E.isAbstractNoise(p.text));
+        if (j > 0) { const c = await cellRange(context, paras, infos, j); pick = E.abstractTargetsInCell(infos, h, c.start, c.end); }
+        else if (!pick) {
+          // template kosong: sel pertama setelah judul yang bukan keywords/history/cite
+          let q = hc.end;
+          for (let guard = 0; q < tblEnd && guard < 12; guard++) {
+            const c = await cellRange(context, paras, infos, q);
+            const first = infos.slice(c.start, c.end).map((p) => (p.text || "").trim()).find(Boolean) || "";
+            if (!first || /open access|cc[ -]by|licen/i.test(first) || !E.isAbstractNoise(first)) { pick = E.abstractTargetsInCell(infos, h, c.start, c.end); break; }
+            q = c.end;
+          }
+        }
+      }
+      if (pick) return { paras, infos, heads, h, pick };
+    } catch (e) { console.warn("lokasi sel abstrak via body gagal, pakai cara teks", e); }
+    // cadangan berbasis teks: paragraf panjang pertama setelah judul di tabel yang sama
+    const j = infos.findIndex((p, q) => q > h && q < tblEnd && E.countWords(p.text) >= 20 && !E.isAbstractNoise(p.text));
+    return { paras, infos, heads, h, pick: j > 0 ? { targets: [j], after: null, cellEnd: j + 1 } : { targets: [], after: h } };
+  }
+
+  /** Hapus paragraf sisa; paragraf terakhir dalam sel tabel tidak bisa dihapus Word -> dikosongkan saja. */
+  function dropExtras(paras, infos, list, cellEnd) {
+    for (let k = list.length - 1; k >= 0; k--) {
+      const j = list[k];
+      const last = infos[j].inTable && (cellEnd != null ? j === cellEnd - 1 : !(infos[j + 1] && infos[j + 1].inTable));
+      if (last) paras[j].clear(); else paras[j].delete();
     }
-    if (win.length) {
-      await context.sync();
-      win.forEach(([j, c]) => { if (!c.isNullObject) { infos[j].row = c.rowIndex; infos[j].cell = c.cellIndex; } });
-    }
-    return { paras, infos, heads, h, pick: E.pickAbstractTarget(infos, h) };
   }
 
   function writeAbstractParagraph(p, runs, profile) {
@@ -473,18 +530,30 @@
       } else {
         const loc = await locateAbstract(context, profile);
         if (!loc) throw new Error("Judul ABSTRACT tidak ditemukan di dokumen. Pakai mode 'Posisi kursor'.");
-        const { paras, pick } = loc;
+        const { paras, infos, pick } = loc;
         if (pick.targets.length) {
           const t = pick.targets;
           const ox = paras[t[0]].getRange("Start").expandTo(paras[t[t.length - 1]].getRange("End")).getOoxml();
           await context.sync();
           backup = ox.value;
-          for (let k = t.length - 1; k >= 1; k--) paras[t[k]].delete();
+          // pakai ulang paragraf yang ada (gaya & latar tiap paragraf terjaga), sisanya dibuang
+          const reuse = t.slice(0, out.length);
+          reuse.forEach((j) => paras[j].clear());
+          dropExtras(paras, infos, t.slice(out.length), pick.cellEnd);
+          reuse.forEach((j, k) => writeAbstractParagraph(paras[j], out[k], profile));
           p0 = paras[t[0]];
-          p0.clear();
-        } else {
-          p0 = paras[pick.after].insertParagraph("", "After");
+          let prev = paras[reuse[reuse.length - 1]];
+          for (let k = reuse.length; k < out.length; k++) {
+            const q = prev.insertParagraph("", "After");
+            writeAbstractParagraph(q, out[k], profile);
+            prev = q;
+          }
+          p0.getRange("Start").select("Start");
+          await context.sync();
+          const words0 = out.reduce((a, p) => a + E.countWords(p.filter((r) => !r.br).map((r) => r.text).join(" ")), 0);
+          return { inserted: out.length, words: words0, backup };
         }
+        p0 = paras[pick.after].insertParagraph("", "After");
       }
       writeAbstractParagraph(p0, out[0], profile);
       let prev = p0;
@@ -511,7 +580,7 @@
       const words = t.reduce((a, j) => a + E.countWords(infos[j].text), 0);
       const ox = paras[t[0]].getRange("Start").expandTo(paras[t[t.length - 1]].getRange("End")).getOoxml();
       await context.sync();
-      for (let k = t.length - 1; k >= 1; k--) paras[t[k]].delete();
+      dropExtras(paras, infos, t.slice(1), pick.cellEnd);
       paras[t[0]].clear();
       await context.sync();
       return { deleted: t.length, words, ooxml: ox.value };
@@ -522,11 +591,11 @@
     return Word.run(async (context) => {
       const loc = await locateAbstract(context, profile);
       if (!loc) throw new Error("Judul ABSTRACT tidak ditemukan di dokumen.");
-      const { paras, pick } = loc;
+      const { paras, infos, pick } = loc;
       const t = pick.targets;
       if (!t.length) { paras[pick.after].insertParagraph("", "After").insertOoxml(ooxml, "Replace"); }
       else {
-        for (let k = t.length - 1; k >= 1; k--) paras[t[k]].delete();
+        dropExtras(paras, infos, t.slice(1), pick.cellEnd);
         paras[t[0]].insertOoxml(ooxml, "Replace");
       }
       await context.sync();

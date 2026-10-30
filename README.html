@@ -134,4 +134,18 @@ src/engine.js         deteksi heading/referensi &amp; aturan format (tanpa Offic
 src/word-ops.js       operasi ke dokumen Word (Office.js, WordApi 1.3+)
 assets/               ikon
 </code></pre>
-<p>Kebutuhan: Word 2016 ke atas / Microsoft 365 / Word Mac / Word web. Fitur "Hapus sisipan terakhir" butuh WordApi 1.4 (Microsoft 365 / Word 2021).</p></body></html>
+<p>Kebutuhan: Word 2016 ke atas / Microsoft 365 / Word Mac / Word web. Fitur "Hapus sisipan terakhir" butuh WordApi 1.4 (Microsoft 365 / Word 2021).</p>
+<h2>6. Catatan versi</h2>
+<p><strong>v6.1:</strong>
+- Perbaikan error <em>GeneralException (TableCell.cellIndex)</em> saat mengganti/mengosongkan abstrak di tabel yang punya sel gabungan (template JEPSI). Add-in tidak lagi memakai nomor baris/kolom sel; sel abstrak dikenali dari isinya.
+- Rapikan tabel juga tidak lagi memakai nomor sel, jadi aman untuk tabel bersel gabungan.</p>
+<p><strong>v6 (perbaikan bug):</strong>
+- Abstrak yang disalin dari dalam tabel (seperti di template JEPSI/AIEDS/VOICE) sekarang terbaca. Kalau seluruh tabel halaman depan ikut tersalin, <em>Article info</em>, <em>Keywords</em> beserta butirnya, <em>Article history</em>, <em>cite</em>, dan lisensi otomatis dilewati.
+- Mengganti abstrak yang terdiri dari beberapa paragraf (VOICE) memakai ulang paragraf yang ada, sehingga tidak error di sel tabel dan latar warnanya terjaga.
+- Hitung kata abstrak tidak lagi ikut menghitung teks <em>To cite this article</em> (JEPSI).
+- Panel tetap aktif walaupun Word lambat siap saat pertama dibuka.
+- Kompatibel dengan Word for Mac versi lama (tanpa regex <em>lookbehind</em>).
+- Rapikan: label caption ("Table 1.") dibold, baris persamaan "(1)" tidak diubah.
+- Menyisipkan setelah daftar bernomor/berpoin tidak membuat isi baru ikut bernomor.
+- Catatan kaki/komentar dari clipboard Word tidak ikut tertempel.
+- "Figure 1" yang berdiri sendiri dikenali sebagai caption, bukan sub-heading.</p></body></html>

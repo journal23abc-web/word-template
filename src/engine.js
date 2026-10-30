@@ -248,7 +248,8 @@
    * @param {DOMParser} [ParserImpl]
    * @returns {{blocks:Array, images:number, tables:number}}
    */
-  function parseHtml(html, ParserImpl) {
+  function parseHtml(html, ParserImpl, opts) {
+    opts = opts || {};
     const P = ParserImpl || (typeof DOMParser !== "undefined" ? DOMParser : null);
     // Buang komentar kondisional Word & fragment marker
     html = String(html).replace(/<!--\[if[\s\S]*?<!\[endif\]-->/gi, "").replace(/<!--[\s\S]*?-->/g, "");
@@ -281,10 +282,20 @@
       const tag = el.tagName.toUpperCase();
       if (SKIP.has(tag)) return;
       if (/mso-list\s*:\s*ignore/i.test(el.getAttribute("style") || "")) return; // nomor/bullet palsu dari Word
+      // daftar catatan kaki/akhir & komentar dari clipboard Word
+      if (/mso-element\s*:\s*(footnote|endnote|comment)(-list)?/i.test(el.getAttribute("style") || "")) return;
+      if (/^_(ftn|edn|msocom)/i.test(el.getAttribute("id") || "") && tag === "DIV") return;
       if (tag === "IMG" || tag === "PICTURE" || tag === "CANVAS" || tag === "V:SHAPE" || tag === "V:IMAGEDATA") { images++; return; }
       if (tag === "BR") { flush(); return; }
       if (tag === "TABLE") {
         flush();
+        // Tabel 1 sel (mis. teks yang disalin dari dalam kotak/sel) atau mode "ratakan" (abstrak):
+        // isi sel diperlakukan sebagai paragraf biasa, bukan tabel data.
+        const allCells = Array.from(el.querySelectorAll("td,th")).filter((td) => td.closest("table") === el);
+        if (opts.flattenTables || allCells.length <= 1) {
+          for (const td of allCells) { for (const c of td.childNodes) walk(c, fmt, "p", ""); flush(); }
+          return;
+        }
         const rows = [];
         el.querySelectorAll("tr").forEach((tr) => {
           if (tr.closest("table") !== el) return; // abaikan tabel bersarang
@@ -339,12 +350,14 @@
   function mdInline(text) {
     // **bold**, *italic*, _italic_ — hanya bila diapit karakter non-spasi
     const runs = [];
-    const re = /(\*\*|__)(?=\S)([\s\S]+?)(?<=\S)\1|(?<![\w*])(\*|_)(?=\S)([^*_\n]+?)(?<=\S)\3(?![\w*])/g;
+    // tanpa lookbehind (tidak didukung WebView lama di Word for Mac)
+    const re = /(\*\*|__)(\S(?:[\s\S]*?\S)?)\1|(^|[^\w*])(\*|_)([^\s*_](?:[^*_\n]*?[^\s*_])?)\4(?![\w*])/g;
     let last = 0, m;
     while ((m = re.exec(text))) {
-      if (m.index > last) runs.push({ text: text.slice(last, m.index) });
+      const start = m.index + (m[1] ? 0 : m[3].length);
+      if (start > last) runs.push({ text: text.slice(last, start) });
       if (m[1]) runs.push({ text: m[2], b: true });
-      else runs.push({ text: m[4], i: true });
+      else runs.push({ text: m[5], i: true });
       last = re.lastIndex;
     }
     if (last < text.length) runs.push({ text: text.slice(last) });
@@ -436,7 +449,7 @@
     const html = clip.html || "";
     // HTML dipakai bila memuat struktur paragraf; jika tidak, pakai teks biasa
     if (html && /<(p|div|h[1-6]|li|br|table|tr)\b/i.test(html)) {
-      const r = parseHtml(html, ParserImpl);
+      const r = parseHtml(html, ParserImpl, { flattenTables: !!(sec && sec.kind === "abstract") });
       if (r.blocks.length) return r;
     }
     return parseText(clip.text || "", { mergeBrokenLines: profile.detect.mergeBrokenLines && !isRef });
@@ -542,7 +555,7 @@
       const text = plain(runs);
       if (!text.trim()) continue;
       if (myNames.has(normHead(text)) && countWords(text) <= 8) { items.push({ type: "skip", runs, why: "judul bagian" }); continue; }
-      if (RE_CAPTION.test(text)) { items.push({ type: "caption", runs }); continue; }
+      if (RE_CAPTION.test(text) || RE_LABEL_ONLY.test(text.trim())) { items.push({ type: "caption", runs }); continue; }
       if (RE_NOTE.test(text)) { items.push({ type: "note", runs }); continue; }
       if (det.detectQuotes !== false && looksLikeQuote(text, bl)) { items.push({ type: "quote", runs }); continue; }
       // heading tidak boleh paragraf terakhir yang berdiri sendiri? -> tetap boleh, tapi butuh sinyal kuat
@@ -887,6 +900,7 @@
         if (heads.some((h) => h.index === j)) break;
         if (!infos[j].inTable && infos[ai].inTable && t) break;
         if (/^(keywords?|kata kunci|article (history|info)|riwayat artikel|received|revised|accepted)\b/i.test(t)) continue;
+        if (/^(to cite this article|how to cite|cite this article|cara mengutip)|open access|cc[ -]by|creative commons|correspond/i.test(t)) continue;
         if (countWords(t) >= 20) res.abstract += countWords(t);
       }
     }
@@ -939,10 +953,11 @@
     const A = profile.abstract || DEFAULT_PROFILE.abstract;
     const labels = (A.labels || []).slice().sort((a, b) => b.length - a.length).map(reEsc).join("|");
     const reStart = new RegExp(`^(${labels})\\s*([–—:]|-(?=\\s)|\\.(?=\\s))\\s*`, "iu");
-    const reMid = new RegExp(`(?<=[.!?)\\]”"])\\s+(${labels})\\s*([–—:]|\\s-\\s)\\s*`, "giu");
+    const reMid = new RegExp(`([.!?)\\]”"])(\\s+)(${labels})\\s*([–—:]|\\s-\\s)\\s*`, "giu");
     const reGeneric = /^([\p{Lu}][\p{L}\/&\- ]{2,40}?)\s+([–—])\s+(?=\S)/u;
     const anyKnown = blocks.some((b) => b.kind === "p" && reStart.test(plain(b.runs).trim()));
     const items = [];
+    let inKeywords = false;
     for (const bl of blocks) {
       if (bl.kind === "table") continue;
       let runs = bl.runs;
@@ -950,7 +965,14 @@
       const t = text.trim();
       if (!t) continue;
       if (/^(abstract|abstrak)\s*[:.]?$/i.test(t)) { items.push({ type: "skip", runs, why: "judul" }); continue; }
-      if (/^(keywords?|kata kunci)\b/i.test(t)) { items.push({ type: "skip", runs, why: "keywords" }); continue; }
+      if (/^(keywords?|kata kunci)\b/i.test(t)) { items.push({ type: "skip", runs, why: "keywords" }); inKeywords = true; continue; }
+      if (/^(article (info|information|history)|riwayat artikel|info artikel|received|revised|accepted|published|available online|diterima|direvisi|disetujui)\b/i.test(t) ||
+          RE_CITE_LINE.test(t) || /open access|cc[ -]by|creative commons|licen[cs]ed? under/i.test(t) || /^(e-?mail|correspond)/i.test(t)) {
+        items.push({ type: "skip", runs, why: "info artikel" }); continue;
+      }
+      // butir keywords ("Digital learning;") setelah baris Keywords
+      if (inKeywords && countWords(t) <= 8 && !/[.!?]\s+\p{Lu}/u.test(t)) { items.push({ type: "skip", runs, why: "keywords" }); continue; }
+      inKeywords = false;
       // titik potong: awal paragraf + label di tengah
       const cuts = [];
       const m0 = reStart.exec(text) || (anyKnown && countWords(text) > 8 ? reGeneric.exec(text) : null);
@@ -958,8 +980,8 @@
       let m;
       reMid.lastIndex = 0;
       while ((m = reMid.exec(text))) {
-        const at = m.index + (m[0].length - m[0].trimStart().length);
-        cuts.push({ at, len: m.index + m[0].length - at, label: m[1], sep: m[2].trim() });
+        const at = m.index + m[1].length + m[2].length;
+        cuts.push({ at, len: m.index + m[0].length - at, label: m[3], sep: m[4].trim() });
       }
       if (!cuts.length) { items.push({ type: "abstract", label: null, runs: normalizeRuns(runs) }); continue; }
       if (cuts[0].at > 0) items.push({ type: "abstract", label: null, runs: normalizeRuns(sliceRuns(runs, 0, cuts[0].at)) });
@@ -1029,6 +1051,10 @@
         if (!t && cand.some((k) => (infos[k].text || "").trim())) { cand.pop(); break; }
       }
     }
+    return trimAbstractCandidates(infos, cand, h);
+  }
+
+  function trimAbstractCandidates(infos, cand, h) {
     const lic = cand.findIndex((j) => /open access|cc by|creative commons|licen[cs]e/i.test(infos[j].text || ""));
     if (lic >= 0) cand = cand.slice(0, lic);
     const filled = cand.filter((j) => (infos[j].text || "").trim());
@@ -1036,10 +1062,24 @@
     return { targets: cand.slice(0, cand.indexOf(filled[filled.length - 1]) + 1), after: null };
   }
 
+  /** Target abstrak bila rentang sel abstrak [cellStart, cellEnd) sudah diketahui (tanpa nomor baris/kolom). */
+  function abstractTargetsInCell(infos, h, cellStart, cellEnd) {
+    const cand = [];
+    for (let j = Math.max(cellStart, h + 1); j < cellEnd; j++) cand.push(j);
+    const r = trimAbstractCandidates(infos, cand, h);
+    r.cellEnd = cellEnd;
+    return r;
+  }
+
+  /** Paragraf yang jelas BUKAN isi abstrak (keywords, article info/history, cite, lisensi). */
+  const isAbstractNoise = (t) => /^(keywords?|kata kunci|article (info|information|history)|riwayat artikel|info artikel|received|revised|accepted|published|to cite|how to cite|cite this|cara mengutip|e-?mail|correspond)/i.test(clean0(t)) || /open access|cc[ -]by|creative commons/i.test(t || "");
+  const clean0 = (t) => String(t || "").replace(WS, " ").trim();
+
   const RE_ABSTRACT_HEAD = /^(abstract|abstrak)\s*[:.]?$/i;
+  const RE_CITE_LINE = /^(to cite this article|how to cite|cite this article|cara mengutip)/i;
 
   return {
-    classifyAbstract, abstractParagraphs, pickAbstractTarget, RE_ABSTRACT_HEAD,
+    classifyAbstract, abstractParagraphs, pickAbstractTarget, abstractTargetsInCell, isAbstractNoise, RE_ABSTRACT_HEAD,
     DEFAULT_PROFILE, PRESETS, presetFor, mergeProfile, clone,
     parseInput, parseHtml, parseText, classify, classifyReferences, classifyExisting,
     paraFormat, finalRuns, countWords, plain, normalizeRuns, titleCase, apaAutoItalic, linkUrls,
