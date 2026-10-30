@@ -9,6 +9,8 @@
   <link rel="stylesheet" href="taskpane.css" />
 </head>
 <body>
+<div class="app">
+  <div class="content" id="content">
   <header class="top">
     <div class="brand">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 11h7M9 14h7M9 17h4" stroke="currentColor" stroke-width="1.6"/></svg>
@@ -18,13 +20,6 @@
       </div>
     </div>
   </header>
-
-  <nav class="tabs" role="tablist">
-    <button role="tab" class="tab active" data-tab="paste">Tempel</button>
-    <button role="tab" class="tab" data-tab="words">Hitung kata</button>
-    <button role="tab" class="tab" data-tab="check">Cek</button>
-    <button role="tab" class="tab" data-tab="template">Template</button>
-  </nav>
 
   <div id="notInWord" class="banner hidden">Mode pratinjau di browser — buka lewat Word untuk menyisipkan ke dokumen.</div>
 
@@ -92,6 +87,29 @@
     </div>
     <form id="templateForm" autocomplete="off"></form>
   </main>
+
+  </div><!-- /content -->
+
+  <!-- ============ MENU KANAN (gaya Paperpal) ============ -->
+  <nav class="rail" role="tablist" aria-label="Menu Template Paste">
+    <button role="tab" class="tab active" data-tab="paste" data-title="Tempel" title="Tempel isi artikel">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6v3H9z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 5.5H6.5A1.5 1.5 0 0 0 5 7v12.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V7a1.5 1.5 0 0 0-1.5-1.5H15" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8.5 11h7M8.5 14h7M8.5 17h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span>Tempel</span>
+    </button>
+    <button role="tab" class="tab" data-tab="words" data-title="Hitung kata" title="Hitung kata & batas jurnal">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V9M10 19V5M15 19v-7M20 19v-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M3 21h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span>Hitung kata</span>
+    </button>
+    <button role="tab" class="tab" data-tab="check" data-title="Cek kesesuaian" title="Cek cite, article history, header/footer">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 12l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Cek</span>
+    </button>
+    <button role="tab" class="tab" data-tab="template" data-title="Template jurnal" title="Atur template jurnal">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h12M20 17h0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="10" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="18" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+      <span>Template</span>
+    </button>
+  </nav>
+</div><!-- /app -->
 
   <dialog id="jsonDialog">
     <h3 id="jsonTitle">Profil</h3>

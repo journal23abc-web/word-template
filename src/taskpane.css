@@ -1,4 +1,5 @@
 :root {
+  --rail: 68px;
   --bg: #f6f7f9;
   --surface: #ffffff;
   --ink: #1d232b;
@@ -22,15 +23,8 @@ body { font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Aria
 .hidden { display: none !important; }
 .m0 { margin: 0; }
 
-.top { padding: 12px 14px 8px; background: var(--surface); border-bottom: 1px solid var(--line); }
-.brand { display: flex; gap: 10px; align-items: center; }
-.brand svg { width: 26px; height: 26px; color: var(--accent); flex: none; }
-.brand-name { font-weight: 650; font-size: 15px; letter-spacing: .1px; }
 .brand-sub { color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
 
-.tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--line); padding: 0 8px; position: sticky; top: 0; z-index: 5; }
-.tab { flex: 1; background: none; border: 0; border-bottom: 2px solid transparent; padding: 9px 4px; font: inherit; color: var(--muted); cursor: pointer; }
-.tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
 
 .banner { margin: 10px 12px 0; padding: 8px 10px; border-radius: var(--radius); background: #fff6e5; color: #6b4300; border: 1px solid #f1d9a6; font-size: 12px; }
 .panel { padding: 12px; }
@@ -133,7 +127,7 @@ dialog { border: 1px solid var(--line); border-radius: 10px; width: calc(100% - 
 dialog h3 { margin: 0 0 8px; font-size: 14px; }
 dialog textarea { width: 100%; height: 260px; font-family: ui-monospace, Consolas, monospace; font-size: 11px; border: 1px solid var(--line); border-radius: 6px; padding: 6px; }
 
-.toast { position: fixed; left: 12px; right: 12px; bottom: 12px; background: #1f2933; color: #fff; padding: 9px 12px; border-radius: 8px; font-size: 12.5px; opacity: 0; transform: translateY(8px); transition: all .2s; pointer-events: none; z-index: 20; }
+.toast { position: fixed; left: 12px; right: calc(var(--rail) + 12px); bottom: 12px; background: #1f2933; color: #fff; padding: 9px 12px; border-radius: 8px; font-size: 12.5px; opacity: 0; transform: translateY(8px); transition: all .2s; pointer-events: none; z-index: 20; }
 .toast.show { opacity: 1; transform: none; }
 .toast.err { background: var(--bad); }
 .toast.ok { background: var(--ok); }
@@ -176,3 +170,22 @@ dialog textarea { width: 100%; height: 260px; font-family: ui-monospace, Consola
 .parsed td:first-child { color: var(--muted); white-space: nowrap; }
 .prow.t-quoteAttr .txt { color: var(--muted); padding-left: 10px; font-size: 11.5px; }
 .prow.t-equation .txt { font-family: ui-monospace, Consolas, monospace; font-size: 11px; text-align: center; }
+
+/* ===== tata letak: konten kiri + menu fitur ikon di kanan (gaya Paperpal), warna tetap ===== */
+html, body { height: 100%; }
+body { overflow: hidden; }
+.app { display: flex; height: 100vh; }
+.content { flex: 1; min-width: 0; overflow-y: auto; overflow-x: hidden; }
+.top { padding: 12px 14px 8px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.brand { display: flex; gap: 10px; align-items: center; }
+.brand svg { width: 26px; height: 26px; color: var(--accent); flex: none; }
+.brand-name { font-weight: 650; font-size: 15px; letter-spacing: .1px; }
+.brand-sub { color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+
+.rail { width: var(--rail); flex: none; background: var(--surface); border-left: 1px solid var(--line); display: flex; flex-direction: column; align-items: stretch; padding: 6px 0; gap: 2px; overflow-y: auto; }
+.rail .tab { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px 9px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; line-height: 1.15; text-align: center; cursor: pointer; }
+.rail .tab svg { width: 22px; height: 22px; }
+.rail .tab:hover { color: var(--accent); background: var(--bg); }
+.rail .tab.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.rail .tab.active::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+.rail .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }

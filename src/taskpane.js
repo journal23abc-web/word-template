@@ -90,7 +90,8 @@
   /* ---------------- tab ---------------- */
   function initTabs() {
     document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
-      document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === b));
+      document.querySelectorAll(".tab").forEach((x) => { x.classList.toggle("active", x === b); x.setAttribute("aria-selected", x === b ? "true" : "false"); });
+      $("#content").scrollTop = 0;
       ["paste", "words", "check", "template"].forEach((k) => $("#tab-" + k).classList.toggle("hidden", k !== b.dataset.tab));
       if (b.dataset.tab === "words") recount();
       if (b.dataset.tab === "check") renderCheckSettings();
