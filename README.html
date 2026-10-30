@@ -1,4 +1,4 @@
-<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Template Paste</title><style>body{font-family:Segoe UI,system-ui,sans-serif;max-width:860px;margin:24px auto;padding:0 16px;line-height:1.55;color:#1d232b}code,pre{background:#f2f4f7;border-radius:4px}pre{padding:10px;overflow:auto}code{padding:1px 4px}table{border-collapse:collapse;font-size:14px}td,th{border:1px solid #dde1e6;padding:4px 8px;text-align:left}</style></head><body><h1>Template Paste — Add-in Word</h1>
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Template Paste</title><style>body{font-family:Segoe UI,system-ui,sans-serif;max-width:900px;margin:24px auto;padding:0 16px;line-height:1.55;color:#1d232b}code,pre{background:#f2f4f7;border-radius:4px}pre{padding:10px;overflow:auto}code{padding:1px 4px}table{border-collapse:collapse;font-size:14px}td,th{border:1px solid #dde1e6;padding:4px 8px;text-align:left}</style></head><body><h1>Template Paste — Add-in Word</h1>
 <p>Tempel isi artikel per bagian (Introduction, Method, Results and Discussion, Conclusion, References, …), lalu add-in menyesuaikan formatnya dengan template jurnal secara otomatis:</p>
 <ul>
 <li><strong>Font, ukuran, perataan, spasi sebelum/sesudah, spasi baris</strong> untuk tiap jenis paragraf</li>
@@ -22,11 +22,13 @@
 <th>AIEDS</th>
 <th>JEPSI</th>
 <th>VOICE</th>
+<th>IJOBER</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>Font</td>
+<td>Cambria</td>
 <td>Cambria</td>
 <td>Cambria</td>
 <td>Cambria</td>
@@ -36,40 +38,47 @@
 <td>12 pt bold KAPITAL, tengah, sesudah 6 pt</td>
 <td>11 pt bold KAPITAL, tengah, sesudah 6 pt</td>
 <td>12 pt bold KAPITAL, tengah, 6/6 pt</td>
+<td>bernomor (1. INTRODUCTION), Heading 1, 11 pt bold, kiri, 24/6 pt</td>
 </tr>
 <tr>
 <td>Sub-heading</td>
 <td>11 pt bold, 3/3 pt</td>
 <td>11 pt bold, 0/6 pt</td>
 <td>11 pt bold, 6/6 pt</td>
+<td>bernomor (2.1 …) dipertahankan, 11 pt bold, 3/3 pt</td>
 </tr>
 <tr>
 <td>Isi</td>
 <td>11 pt justify, 3/3 pt, spasi tunggal</td>
 <td>11 pt justify, 0/6 pt, spasi tunggal</td>
 <td>11 pt justify, 6/6 pt</td>
+<td>11 pt justify, 3/3 pt</td>
 </tr>
 <tr>
 <td>Caption / Note.</td>
 <td>label bold / Note. tegak</td>
 <td>label bold / <em>Note.</em> italic</td>
 <td>label bold; tabel 10 pt, gambar 11 pt</td>
+<td>label bold, 10 pt (gaya Normal — gaya Caption template ini italic)</td>
 </tr>
 <tr>
 <td>Abstrak</td>
 <td>terstruktur, label bold " – ", 10 pt rata kiri, 1 paragraf dengan line break</td>
 <td>1 paragraf, 9 pt justify, sesudah 8 pt, spasi 1,08</td>
 <td>terstruktur, paragraf terpisah, hanya label bold, 10 pt justify</td>
+<td>1 paragraf, 10 pt justify (bukan di tabel)</td>
 </tr>
 <tr>
 <td>Kutipan langsung</td>
-<td>menjorok 1,27 cm, italic</td>
-<td>menjorok 1,27 cm, italic</td>
-<td>menjorok 1,27 cm, italic</td>
+<td>APA 7</td>
+<td>APA 7</td>
+<td>APA 7</td>
+<td>APA 7</td>
 </tr>
 <tr>
 <td>Tabel</td>
 <td>10 pt, garis APA, isi rata tengah</td>
+<td>10 pt, garis APA, isi rata kiri</td>
 <td>10 pt, garis APA, isi rata kiri</td>
 <td>10 pt, garis APA, isi rata kiri</td>
 </tr>
@@ -78,9 +87,14 @@
 <td>11 pt, hanging 1,27 cm, sesudah 6 pt</td>
 <td>11 pt, hanging 1,27 cm, sesudah 6 pt</td>
 <td>11 pt, hanging 0,83 cm, sesudah 4 pt, tanpa italic</td>
+<td>11 pt, hanging 0,85 cm, sesudah 3 pt, tanpa italic</td>
 </tr>
 </tbody>
 </table>
+<p><strong>Kutipan langsung / wawancara mengikuti APA 7</strong> (Publication Manual 8.27 &amp; 8.36), bawaan untuk semua jurnal dan bisa diubah per jurnal di Template → Kutipan:
+- <strong>≥ 40 kata</strong> → blok menjorok <strong>1,27 cm</strong>, <strong>tanpa tanda kutip</strong>, <strong>tidak italic</strong>; identitas partisipan <strong>dalam kurung setelah tanda baca akhir</strong>, misalnya <em>… improve things going forward. (Internal Audit Practitioner, subsidiary company, translated from Bahasa Indonesia)</em>.
+- <strong>&lt; 40 kata</strong> → APA menulisnya di dalam kalimat dengan tanda kutip. Add-in tetap menampilkannya sebagai paragraf terpisah, tetapi <strong>tanda kutipnya dipertahankan</strong>: “…” (Peran, kode).
+- Atribusi yang ditulis di <strong>baris terpisah</strong> (gaya IJOBER) atau <strong>menempel setelah tanda kutip</strong> (gaya JEPSI: “…” Teacher, S1) otomatis dipindahkan ke dalam kurung di akhir kutipan. <strong>Rapikan</strong> juga membetulkan kutipan yang sudah ada di dokumen.</p>
 <p><strong>Batas kata diatur sendiri per jurnal</strong> di tab <strong>Hitung kata → Aturan hitung kata</strong>: maksimal/minimal kata isi, maksimal kata abstrak, bagian mana yang ikut dihitung (mis. referensi, Author Contribution, AI Disclosure), dan teks tabel. 0 = tidak dibatasi.</p>
 <hr />
 <h2>1. Hosting (sekali saja, gratis lewat GitHub Pages)</h2>
@@ -136,6 +150,12 @@ assets/               ikon
 </code></pre>
 <p>Kebutuhan: Word 2016 ke atas / Microsoft 365 / Word Mac / Word web. Fitur "Hapus sisipan terakhir" butuh WordApi 1.4 (Microsoft 365 / Word 2021).</p>
 <h2>6. Catatan versi</h2>
+<p><strong>v7:</strong>
+- Template baru <strong>IJOBER</strong>.
+- Kutipan wawancara mengikuti <strong>APA 7</strong> untuk semua jurnal (lihat di atas).
+- Baris persamaan (Y = β0 + …) dikenali dan tidak dianggap sub-heading.
+- Sub-heading "Theme 1: …" yang panjang dikenali.
+- Cek: article history dalam satu baris "(Received: …; Revised: …; Accepted: …)", rentang halaman di header ("Page 57-71") dibandingkan dengan penomoran dokumen, dan <em>cite</em> tidak wajib untuk jurnal yang tidak memakainya.</p>
 <p><strong>v6.1:</strong>
 - Perbaikan error <em>GeneralException (TableCell.cellIndex)</em> saat mengganti/mengosongkan abstrak di tabel yang punya sel gabungan (template JEPSI). Add-in tidak lagi memakai nomor baris/kolom sel; sel abstrak dikenali dari isinya.
 - Rapikan tabel juga tidak lagi memakai nomor sel, jadi aman untuk tabel bersel gabungan.</p>

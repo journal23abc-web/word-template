@@ -48,6 +48,8 @@
       st.profiles[n] = Object.assign(E.clone(pr), { name: n });
       if (!st.presetsAdded.includes(pr.base)) st.presetsAdded.push(pr.base);
     });
+    // profil lama: aturan kutipan diganti ke APA 7 (versi lama: italic, tanpa penanganan atribusi)
+    Object.values(st.profiles).forEach((p) => { if (p.quote && !p.quote.apa) delete p.quote; });
     // profil lama: tambahkan kartu ABSTRACT bila belum ada
     Object.values(st.profiles).forEach((p) => {
       if (Array.isArray(p.sections) && !p.sections.some((x) => x.kind === "abstract")) {
@@ -114,7 +116,7 @@
   /* ---------------- kartu bagian ---------------- */
   const TYPE_OPTS = [
     ["body", "Isi"], ["heading2", "Heading 2"], ["heading3", "Heading 3"],
-    ["quote", "Kutipan"], ["caption", "Caption"], ["note", "Catatan"], ["ref", "Referensi"], ["table", "Tabel"], ["skip", "Lewati"],
+    ["quote", "Kutipan"], ["quoteAttr", "Atribusi"], ["equation", "Persamaan"], ["caption", "Caption"], ["note", "Catatan"], ["ref", "Referensi"], ["table", "Tabel"], ["skip", "Lewati"],
   ];
   const typeKey = (it) => (it.type === "heading" ? "heading" + (it.level || 2) : it.type);
 
@@ -222,6 +224,8 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     if (c("table")) parts.push(c("table") + " tabel");
     if (c("note")) parts.push(c("note") + " catatan");
     if (c("quote")) parts.push(c("quote") + " kutipan");
+    if (c("quoteAttr")) parts.push(c("quoteAttr") + " atribusi (digabung ke kutipan)");
+    if (c("equation")) parts.push(c("equation") + " persamaan");
     return parts.join(" · ") + (parts.length ? ". Ubah jenis lewat menu di kiri bila deteksi keliru." : "");
   }
 
@@ -358,7 +362,7 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     setBusy(true);
     try {
       const r = await WordOps.reformatSection(key, state.profile);
-      toast(`✓ ${r.formatted} paragraf dirapikan (${r.headings} sub-heading${r.tables ? `, ${r.tables} tabel` : ""}).` + (r.tableErrors ? ` ${r.tableErrors} tabel gagal dirapikan (mungkin sel gabungan rumit).` : ""), r.tableErrors ? "err" : "ok", 5000);
+      toast(`✓ ${r.formatted} paragraf dirapikan (${r.headings} sub-heading${r.quotes ? `, ${r.quotes} kutipan` : ""}${r.tables ? `, ${r.tables} tabel` : ""}).` + (r.tableErrors ? ` ${r.tableErrors} tabel gagal dirapikan (mungkin sel gabungan rumit).` : ""), r.tableErrors ? "err" : "ok", 5000);
     } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
   }
 
@@ -561,7 +565,11 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
       ["labels", "Label yang dikenali (pisahkan koma)", "list"],
     ] },
     { title: "Kutipan langsung (wawancara)", prefix: "quote", fields: [
-      ["italic", "Miring (italic)", "bool"],
+      ["minBlockWords", "Kutipan blok bila ≥ … kata (APA: 40)", "number", { step: 1, min: 0 }],
+      ["removeMarks", "Hapus tanda kutip pada kutipan blok (APA)", "bool"],
+      ["attribution", "Atribusi partisipan", "select", { options: [["paren", "Dalam kurung setelah kutipan (APA)"], ["keep", "Biarkan seperti tempelan"]] }],
+      ["mergeAttribution", "Gabungkan baris atribusi terpisah ke kutipan", "bool"],
+      ["italic", "Miring (italic) — APA: tidak", "bool"],
       ["leftCm", "Indentasi kiri (cm)", "number", { step: 0.01, min: 0 }],
       ["rightCm", "Indentasi kanan (cm)", "number", { step: 0.01, min: 0 }],
       ...paraFields({}),

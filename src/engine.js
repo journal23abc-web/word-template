@@ -50,7 +50,11 @@
         "Findings", "Results", "Research limitations/implications", "Research implications/limitations", "Research implications", "Research limitations", "Theoretical implications", "Managerial implications", "Policy implications", "Contribution", "Contributions", "Limitations", "Practical implications", "Social implications", "Implications",
         "Originality/value", "Originality", "Value", "Conclusion", "Conclusions", "Novelty", "Tujuan", "Metode", "Hasil", "Temuan", "Kesimpulan", "Keterbatasan", "Keterbatasan penelitian", "Implikasi", "Implikasi penelitian", "Orisinalitas", "Kebaruan"],
     },
-    quote:   { style: "Normal", size: 11, align: "Justified", leftCm: 1.27, rightCm: 0, italic: true, before: 3, after: 3, line: 1 },
+    // Kutipan langsung / wawancara — APA 7 (Publication Manual 8.27 & 8.36):
+    // >= 40 kata = blok menjorok 0,5 in (1,27 cm), tanpa tanda kutip, tidak italic, atribusi (…) setelah tanda baca akhir.
+    quote:   { style: "Normal", size: 11, align: "Justified", leftCm: 1.27, rightCm: 0, italic: false, before: 3, after: 3, line: 1,
+               apa: 1, minBlockWords: 40, removeMarks: true, attribution: "paren", mergeAttribution: true },
+    equation: { align: "Centered" },
     table:   { size: 10, headerBold: true, apaBorders: true, firstColLeft: true, cellAlign: "Centered" },
     references: {
       style: "Normal", size: 11, align: "Justified", hangingCm: 1.27, before: 0, after: 6, line: 1,
@@ -94,7 +98,7 @@
     Object.assign(p.body, sp);
     Object.assign(p.caption, sp);
     Object.assign(p.note, sp, { labelItalic: true });
-    Object.assign(p.quote, sp, { leftCm: 1.27, italic: true });
+    Object.assign(p.quote, sp, { leftCm: 1.27, italic: false }); // naskah copyedit JEPSI memakai italic; APA 7: tidak italic
     Object.assign(p.table, { cellAlign: "Left" });
     Object.assign(p.references, sp, { hangingCm: 1.27 });
     Object.assign(p.abstract, { size: 9, align: "Justified", before: 0, after: 8, line: 1.08, labelSep: "", joinLabeled: "paragraphs" });
@@ -123,8 +127,38 @@
     return p;
   })();
 
+  /* Profil bawaan IJOBER — diturunkan dari naskah copyedit Kurniawan & Leniwati (2026) */
+  const IJOBER_PROFILE = (function () {
+    const p = clone(DEFAULT_PROFILE);
+    p.name = "IJOBER";
+    p.base = "ijober";
+    p.journal = { name: "", abbrev: "IJOBER" };
+    p.check = Object.assign({}, p.check, { requireCite: false });
+    const sp = { before: 3, after: 3, line: 1 };
+    // judul bagian bernomor ("1. INTRODUCTION"), gaya Heading 1, rata kiri
+    Object.assign(p.sectionHeading, { style: "Heading 1", size: 11, bold: true, caps: true, align: "Left", before: 24, after: 6, line: 1 });
+    Object.assign(p.h2, sp); Object.assign(p.h3, sp);
+    Object.assign(p.body, sp);
+    Object.assign(p.caption, { size: 10, figureSize: 10, before: 0, after: 0, line: 1, style: "Normal" }); // gaya Caption di template ini italic -> pakai Normal
+    Object.assign(p.note, { size: 10, before: 0, after: 3 });
+    Object.assign(p.quote, sp);
+    Object.assign(p.table, { size: 10, cellAlign: "Left" });
+    Object.assign(p.references, { before: 0, after: 3, line: 1, hangingCm: 0.85, autoItalic: false });
+    Object.assign(p.abstract, { size: 10, align: "Justified", before: 0, after: 0, line: 1, labelSep: "", joinLabeled: "paragraphs" });
+    p.detect.stripHeadingNumbers = false; // sub-heading bernomor (2.1, 3.5) dipertahankan
+    p.sections = [
+      { key: "abstract", title: "ABSTRACT", aliases: ["Abstract", "Abstrak"], kind: "abstract" },
+      { key: "intro", title: "1. INTRODUCTION", aliases: ["Introduction", "Pendahuluan"] },
+      { key: "method", title: "2. METHOD", aliases: ["Methods", "Methodology", "Research Method", "Research Methods", "Metode", "Metode Penelitian"] },
+      { key: "rd", title: "3. RESULTS AND DISCUSSION", aliases: ["Results and Discussions", "Result and Discussion", "Hasil dan Pembahasan"], majorSubheadings: [] },
+      { key: "concl", title: "4. CONCLUSIONS AND SUGGESTION", aliases: ["Conclusion", "Conclusions", "Conclusion and Suggestion", "Conclusions and Suggestions", "Kesimpulan", "Kesimpulan dan Saran"] },
+      { key: "refs", title: "REFERENCES", aliases: ["Reference", "Bibliography", "Daftar Pustaka", "Referensi"], kind: "references" },
+    ];
+    return p;
+  })();
+
   /** Template bawaan (urutan = urutan di menu). */
-  const PRESETS = [DEFAULT_PROFILE, JEPSD_PROFILE, VOICE_PROFILE];
+  const PRESETS = [DEFAULT_PROFILE, JEPSD_PROFILE, VOICE_PROFILE, IJOBER_PROFILE];
   const presetFor = (base) => PRESETS.find((x) => x.base === base) || DEFAULT_PROFILE;
 
   /** Gabungkan profil tersimpan dengan default (agar kunci baru tetap ada). */
@@ -488,10 +522,35 @@
     return [sec.title].concat(sec.aliases || []).map(normHead);
   }
 
+  /** Baris persamaan (mis. "Y = β0 + β1X1 + ε" atau "… (1)"). */
+  function looksLikeEquation(text) {
+    const t = text.trim();
+    if (!t || countWords(t) > 30) return false;
+    if (/^\(\d+[a-z]?\)$/.test(t)) return true;
+    if (!/[=≤≥≈]/.test(t)) return false;
+    if (/\b(the|and|of|is|are|was|were|that|with|yang|dan|adalah)\b/i.test(t)) return false;
+    return /[+\-−×÷∑∏√∫^βαγδεθλμσπρτφχψω₀-₉]|\b[A-Za-z]\d|\b[A-Za-z]\s*[=+]/u.test(t);
+  }
+
+  /** Baris atribusi kutipan (nama/peran partisipan) yang berdiri sendiri setelah kutipan. */
+  const RE_ROLE = /\b(informant|participant|respondent|interviewee|teacher|student|manager|head|officer|staff|parent|principal|lecturer|director|practitioner|auditor|employee|translated|informan|narasumber|responden|partisipan|guru|siswa|kepala|dosen|pegawai|diterjemahkan|P\d+|R\d+|S\d+)\b/i;
+  function looksLikeAttribution(text, runs) {
+    const t = text.trim();
+    if (!t || countWords(t) > 25 || /[.!?]\s+\p{Lu}/u.test(t)) return false;
+    const allItalic = runs.length && runs.every((r) => r.i || !/\S/.test(r.text));
+    const wrapped = /^[(\[].*[)\]]\.?$/.test(t);
+    const dashed = /^[—–-]\s*\S/.test(t);
+    return wrapped || dashed || allItalic || RE_ROLE.test(t);
+  }
+
   function looksLikeHeading(text, runs, block, det) {
+    if (looksLikeEquation(text)) return false;
     const t = text.trim();
     const words = countWords(t);
-    if (!words || words > (det.maxHeadingWords || 15) || t.length > 160) return false;
+    // sinyal kuat (bold penuh / bernomor / "Theme 1:") boleh lebih panjang
+    const strongSig = (runs.length && runs.every((r) => r.b || !/\S/.test(r.text))) || RE_NUMBERED.test(t) || /^(Theme|Tema|Sub-?theme|Subtema)\s+\d+\s*[:.]/i.test(t) || (block.tag && /^h[1-6]$/.test(block.tag));
+    const maxW = strongSig ? Math.max(det.maxHeadingWords || 15, 25) : (det.maxHeadingWords || 15);
+    if (!words || words > maxW || t.length > (strongSig ? 220 : 160)) return false;
     if (/^\d+(\.\d+)*\.?$/.test(t)) return false;
     if (RE_CAPTION.test(t) || RE_NOTE.test(t)) return false;
     const letters = (t.match(/\p{L}/gu) || []).length;
@@ -506,7 +565,7 @@
     if (/:$/.test(t) && !allBold) return false;
     if (RE_CITATION.test(t)) return false;
     if (!/^[\p{Lu}\d"“'‘(\[]/u.test(t)) return false;
-    if (allBold || numbered) return true;
+    if (allBold || numbered || /^(Theme|Tema|Sub-?theme|Subtema)\s+\d+\s*[:.]/i.test(t)) return true;
     // teks biasa: pendek, tanpa tanda titik akhir, huruf besar di awal
     return words <= (det.maxHeadingWords || 15);
   }
@@ -558,6 +617,10 @@
       if (RE_CAPTION.test(text) || RE_LABEL_ONLY.test(text.trim())) { items.push({ type: "caption", runs }); continue; }
       if (RE_NOTE.test(text)) { items.push({ type: "note", runs }); continue; }
       if (det.detectQuotes !== false && looksLikeQuote(text, bl)) { items.push({ type: "quote", runs }); continue; }
+      // atribusi kutipan pada paragraf tersendiri (mis. "Risk Management Manager (translated …)")
+      const prevIt = items[items.length - 1];
+      if (prevIt && prevIt.type === "quote" && looksLikeAttribution(text, runs) && !runs.every((r) => r.b)) { items.push({ type: "quoteAttr", runs }); continue; }
+      if (looksLikeEquation(text)) { items.push({ type: "equation", runs }); continue; }
       // heading tidak boleh paragraf terakhir yang berdiri sendiri? -> tetap boleh, tapi butuh sinyal kuat
       const isLast = idx === blocks.length - 1;
       if (looksLikeHeading(text, runs, bl, det)) {
@@ -738,7 +801,8 @@
       }
       case "note": c = P.note; break;
       case "abstract": c = Object.assign({}, P.abstract || DEFAULT_PROFILE.abstract, { bold: false }); break;
-      case "quote": c = P.quote || P.body; left = (c.leftCm || 0) * CM; break;
+      case "quote": case "quoteAttr": c = P.quote || P.body; left = (c.leftCm || 0) * CM; break;
+      case "equation": c = Object.assign({}, P.body, { align: (P.equation && P.equation.align) || "Centered" }); break;
       case "ref": c = P.references; left = (c.hangingCm || 0) * CM; first = -left; break;
       case "blank": c = Object.assign({}, P.body, { before: 0, after: 0 }); break;
       default: c = P.body; first = (c.firstIndentCm || 0) * CM;
@@ -752,9 +816,9 @@
       line: +c.line || 1,
       firstIndent: Math.round(first * 100) / 100,
       leftIndent: Math.round(left * 100) / 100,
-      rightIndent: it.type === "quote" ? Math.round(((c.rightCm || 0) * CM) * 100) / 100 : 0,
+      rightIndent: it.type === "quote" || it.type === "quoteAttr" ? Math.round(((c.rightCm || 0) * CM) * 100) / 100 : 0,
       bold: !!c.bold,
-      italic: !!c.italic,
+      italic: it.type === "quoteAttr" ? false : !!c.italic,
     };
   }
 
@@ -798,9 +862,68 @@
       const m = RE_NOTE.exec(plain(runs));
       if (m && profile.note.labelItalic) runs = patchRange(runs, 0, m[0].length, { i: true });
     }
-    if (it.type === "quote" && profile.quote && profile.quote.italic) runs.forEach((r) => (r.i = true));
+    if ((it.type === "quote" || it.type === "quoteAttr") && profile.quote) {
+      if (profile.quote.italic) runs.forEach((r) => (r.i = true));
+      else {
+        // kutipan yang seluruhnya italic dari naskah sumber -> tegak (APA); italic sebagian (istilah asing) dipertahankan
+        let all = 0, ital = 0;
+        runs.forEach((r) => { all += r.text.length; if (r.i) ital += r.text.length; });
+        if (all && ital / all >= 0.6) runs.forEach((r) => (r.i = false));
+      }
+    }
     if (it.type === "ref") runs.forEach((r) => (r.b = false));
     return normalizeRuns(runs);
+  }
+
+  /**
+   * Siapkan items sebelum disisipkan: kutipan diformat sesuai APA 7.
+   *  - atribusi di paragraf tersendiri digabung ke kutipannya: "… ." (Peran, kode)
+   *  - atribusi yang menempel di belakang tanda kutip penutup ("…” Teacher, S1") -> (Teacher, S1)
+   *  - tanda kutip pembuka/penutup dibuang bila kutipan >= minBlockWords (blok)
+   */
+  function cleanAttribution(t) {
+    let a = clean0(t).replace(/^[—–\-,;:\s]+/, "").replace(/[.;,\s]+$/, "");
+    if (/^\(.*\)$/.test(a) && a.indexOf(")") === a.length - 1) a = a.slice(1, -1).trim();
+    a = a.replace(/\s*\(([^()]*)\)/g, (m, x) => ", " + x.trim()).replace(/^,\s*/, "").replace(/,\s*,/g, ",");
+    return a;
+  }
+  function prepareItems(items, profile) {
+    const Q = Object.assign({ minBlockWords: 40, removeMarks: true, attribution: "paren", mergeAttribution: true }, profile.quote || {});
+    const out = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.type !== "quote") {
+        if (it.type === "quoteAttr" && !Q.mergeAttribution) out.push(it);
+        else if (it.type !== "quoteAttr") out.push(it);
+        continue;
+      }
+      let runs = (it.runs || []).map((r) => Object.assign({}, r));
+      let text = plain(runs);
+      // atribusi menempel setelah tanda kutip penutup
+      let attr = "";
+      const close = Math.max(text.lastIndexOf("”"), text.lastIndexOf('"'), text.lastIndexOf("»"));
+      if (Q.attribution === "paren" && close > 0 && text.slice(close + 1).trim()) {
+        attr = text.slice(close + 1);
+        runs = sliceRuns(runs, 0, close + 1); text = plain(runs);
+      }
+      const nx = items[i + 1];
+      if (Q.mergeAttribution && nx && nx.type === "quoteAttr") { attr = attr ? attr + "; " + plain(nx.runs) : plain(nx.runs); i++; }
+      runs = normalizeRuns(runs); text = plain(runs);
+      const open = /^\s*[“"«‘]/.exec(text);
+      const endQ = /[”"»’]\s*$/.exec(text);
+      const body = text.replace(/^\s*[“"«‘]/, "").replace(/[”"»’]\s*$/, "");
+      const isBlock = countWords(body) >= (Q.minBlockWords || 40);
+      if (Q.removeMarks && isBlock && open && endQ) {
+        runs = sliceRuns(runs, open.index + open[0].length, endQ.index);
+        runs = normalizeRuns(runs);
+      }
+      if (attr && Q.attribution === "paren") {
+        const a = cleanAttribution(attr);
+        if (a) runs = runs.concat([{ text: " (" + a + ")", i: false, b: false }]);
+      } else if (attr) runs = runs.concat([{ text: " " + clean0(attr) }]);
+      out.push(Object.assign({}, it, { runs: normalizeRuns(runs), block: isBlock }));
+    }
+    return out;
   }
 
   /* ------------------------------------------------------------------ */
@@ -909,7 +1032,7 @@
 
   /** Klasifikasi ulang paragraf yang sudah ada di dokumen (untuk "Rapikan"). */
   function classifyExisting(paras, sec, profile) {
-    const blocks = paras.map((p) => ({ kind: "p", tag: "p", runs: [{ text: p.text || "", b: p.bold === true }] }));
+    const blocks = paras.map((p) => ({ kind: "p", tag: "p", runs: [{ text: p.text || "", b: p.bold === true, i: p.italic === true }] }));
     const det = Object.assign({}, profile.detect, { mergeBrokenLines: false });
     const prof = Object.assign({}, profile, { detect: det, references: Object.assign({}, profile.references, { sort: false }) });
     if (sec.kind === "references") return blocks.map((b) => ({ type: plain(b.runs).trim() ? "ref" : "skip" }));
@@ -918,6 +1041,14 @@
       if (!plain(b.runs).trim()) { items[i] = { type: "skip" }; return; }
       const one = classify([b].concat(blocks[i + 1] ? [blocks[i + 1]] : []), {}, prof)[0] || { type: "body" };
       items[i] = one;
+    });
+    // atribusi kutipan di paragraf tersendiri
+    let prev = -1;
+    items.forEach((it, i) => {
+      if (!it || it.type === "skip") return;
+      if (prev >= 0 && items[prev].type === "quote" && it.type !== "quote" && looksLikeAttribution(paras[i].text || "", blocks[i].runs) && paras[i].bold !== true) items[i] = { type: "quoteAttr" };
+      else if (looksLikeEquation(paras[i].text || "")) items[i] = { type: "equation" };
+      prev = i;
     });
     // level heading untuk R&D
     const majors = new Set((sec.majorSubheadings || []).map(normHead));
@@ -1082,7 +1213,7 @@
     classifyAbstract, abstractParagraphs, pickAbstractTarget, abstractTargetsInCell, isAbstractNoise, RE_ABSTRACT_HEAD,
     DEFAULT_PROFILE, PRESETS, presetFor, mergeProfile, clone,
     parseInput, parseHtml, parseText, classify, classifyReferences, classifyExisting,
-    paraFormat, finalRuns, countWords, plain, normalizeRuns, titleCase, apaAutoItalic, linkUrls,
+    paraFormat, finalRuns, prepareItems, cleanAttribution, looksLikeEquation, looksLikeAttribution, countWords, plain, normalizeRuns, titleCase, apaAutoItalic, linkUrls,
     findSectionHeadings, sectionRange, pickAnchor, planNewSection, countDocument, normHead,
     CM,
   };

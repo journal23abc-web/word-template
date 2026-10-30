@@ -17,17 +17,22 @@ Tempel isi artikel per bagian (Introduction, Method, Results and Discussion, Con
 
 **Template bawaan** (pilih di menu **Jurnal** di bagian atas tab Tempel):
 
-| | AIEDS | JEPSI | VOICE |
-|---|---|---|---|
-| Font | Cambria | Cambria | Cambria |
-| Judul bagian | 12 pt bold KAPITAL, tengah, sesudah 6 pt | 11 pt bold KAPITAL, tengah, sesudah 6 pt | 12 pt bold KAPITAL, tengah, 6/6 pt |
-| Sub-heading | 11 pt bold, 3/3 pt | 11 pt bold, 0/6 pt | 11 pt bold, 6/6 pt |
-| Isi | 11 pt justify, 3/3 pt, spasi tunggal | 11 pt justify, 0/6 pt, spasi tunggal | 11 pt justify, 6/6 pt |
-| Caption / Note. | label bold / Note. tegak | label bold / *Note.* italic | label bold; tabel 10 pt, gambar 11 pt |
-| Abstrak | terstruktur, label bold " – ", 10 pt rata kiri, 1 paragraf dengan line break | 1 paragraf, 9 pt justify, sesudah 8 pt, spasi 1,08 | terstruktur, paragraf terpisah, hanya label bold, 10 pt justify |
-| Kutipan langsung | menjorok 1,27 cm, italic | menjorok 1,27 cm, italic | menjorok 1,27 cm, italic |
-| Tabel | 10 pt, garis APA, isi rata tengah | 10 pt, garis APA, isi rata kiri | 10 pt, garis APA, isi rata kiri |
-| Referensi | 11 pt, hanging 1,27 cm, sesudah 6 pt | 11 pt, hanging 1,27 cm, sesudah 6 pt | 11 pt, hanging 0,83 cm, sesudah 4 pt, tanpa italic |
+| | AIEDS | JEPSI | VOICE | IJOBER |
+|---|---|---|---|---|
+| Font | Cambria | Cambria | Cambria | Cambria |
+| Judul bagian | 12 pt bold KAPITAL, tengah, sesudah 6 pt | 11 pt bold KAPITAL, tengah, sesudah 6 pt | 12 pt bold KAPITAL, tengah, 6/6 pt | bernomor (1. INTRODUCTION), Heading 1, 11 pt bold, kiri, 24/6 pt |
+| Sub-heading | 11 pt bold, 3/3 pt | 11 pt bold, 0/6 pt | 11 pt bold, 6/6 pt | bernomor (2.1 …) dipertahankan, 11 pt bold, 3/3 pt |
+| Isi | 11 pt justify, 3/3 pt, spasi tunggal | 11 pt justify, 0/6 pt, spasi tunggal | 11 pt justify, 6/6 pt | 11 pt justify, 3/3 pt |
+| Caption / Note. | label bold / Note. tegak | label bold / *Note.* italic | label bold; tabel 10 pt, gambar 11 pt | label bold, 10 pt (gaya Normal — gaya Caption template ini italic) |
+| Abstrak | terstruktur, label bold " – ", 10 pt rata kiri, 1 paragraf dengan line break | 1 paragraf, 9 pt justify, sesudah 8 pt, spasi 1,08 | terstruktur, paragraf terpisah, hanya label bold, 10 pt justify | 1 paragraf, 10 pt justify (bukan di tabel) |
+| Kutipan langsung | APA 7 | APA 7 | APA 7 | APA 7 |
+| Tabel | 10 pt, garis APA, isi rata tengah | 10 pt, garis APA, isi rata kiri | 10 pt, garis APA, isi rata kiri | 10 pt, garis APA, isi rata kiri |
+| Referensi | 11 pt, hanging 1,27 cm, sesudah 6 pt | 11 pt, hanging 1,27 cm, sesudah 6 pt | 11 pt, hanging 0,83 cm, sesudah 4 pt, tanpa italic | 11 pt, hanging 0,85 cm, sesudah 3 pt, tanpa italic |
+
+**Kutipan langsung / wawancara mengikuti APA 7** (Publication Manual 8.27 & 8.36), bawaan untuk semua jurnal dan bisa diubah per jurnal di Template → Kutipan:
+- **≥ 40 kata** → blok menjorok **1,27 cm**, **tanpa tanda kutip**, **tidak italic**; identitas partisipan **dalam kurung setelah tanda baca akhir**, misalnya *… improve things going forward. (Internal Audit Practitioner, subsidiary company, translated from Bahasa Indonesia)*.
+- **< 40 kata** → APA menulisnya di dalam kalimat dengan tanda kutip. Add-in tetap menampilkannya sebagai paragraf terpisah, tetapi **tanda kutipnya dipertahankan**: “…” (Peran, kode).
+- Atribusi yang ditulis di **baris terpisah** (gaya IJOBER) atau **menempel setelah tanda kutip** (gaya JEPSI: “…” Teacher, S1) otomatis dipindahkan ke dalam kurung di akhir kutipan. **Rapikan** juga membetulkan kutipan yang sudah ada di dokumen.
 
 **Batas kata diatur sendiri per jurnal** di tab **Hitung kata → Aturan hitung kata**: maksimal/minimal kata isi, maksimal kata abstrak, bagian mana yang ikut dihitung (mis. referensi, Author Contribution, AI Disclosure), dan teks tabel. 0 = tidak dibatasi.
 
@@ -100,6 +105,13 @@ assets/               ikon
 Kebutuhan: Word 2016 ke atas / Microsoft 365 / Word Mac / Word web. Fitur "Hapus sisipan terakhir" butuh WordApi 1.4 (Microsoft 365 / Word 2021).
 
 ## 6. Catatan versi
+
+**v7:**
+- Template baru **IJOBER**.
+- Kutipan wawancara mengikuti **APA 7** untuk semua jurnal (lihat di atas).
+- Baris persamaan (Y = β0 + …) dikenali dan tidak dianggap sub-heading.
+- Sub-heading "Theme 1: …" yang panjang dikenali.
+- Cek: article history dalam satu baris "(Received: …; Revised: …; Accepted: …)", rentang halaman di header ("Page 57-71") dibandingkan dengan penomoran dokumen, dan *cite* tidak wajib untuk jurnal yang tidak memakainya.
 
 **v6.1:**
 - Perbaikan error *GeneralException (TableCell.cellIndex)* saat mengganti/mengosongkan abstrak di tabel yang punya sel gabungan (template JEPSI). Add-in tidak lagi memakai nomor baris/kolom sel; sel abstrak dikenali dari isinya.

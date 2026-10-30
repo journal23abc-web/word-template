@@ -119,8 +119,9 @@
    * Sisipkan items berurutan mulai dari `start` (Paragraph) di lokasi `loc` ('After'|'Before').
    * return {first, last, count, tables}
    */
-  async function insertItems(context, start, loc, items, profile, opts) {
+  async function insertItems(context, start, loc, items0, profile, opts) {
     opts = opts || {};
+    const items = E.prepareItems(items0, profile); // kutipan: format APA 7
     let cursor = start, cursorIsTable = false, detachNext = !!opts.anchorIsList;
     let first = null, last = null, count = 0, sinceSync = 0;
     const tables = [];
@@ -296,7 +297,7 @@
       if (!range) throw new Error(`Judul "${sec.title}" tidak ditemukan di dokumen.`);
       const idx = [];
       for (let j = range.start + 1; j < range.end; j++) if (!infos[j].inTable) idx.push(j);
-      const items = E.classifyExisting(idx.map((j) => ({ text: infos[j].text, bold: infos[j].bold })), sec, profile);
+      const items = E.classifyExisting(idx.map((j) => ({ text: infos[j].text, bold: infos[j].bold, italic: infos[j].italic })), sec, profile);
 
       // judul bagian
       const hp = paras[range.start];
@@ -305,15 +306,31 @@
         const t = infos[range.start].text.trim();
         if (t !== t.toUpperCase()) hp.insertText(t.toUpperCase(), "Replace");
       }
-      let n = 0;
+      let n = 0, quotesFixed = 0;
+      const Q = Object.assign({ minBlockWords: 40, removeMarks: true, attribution: "paren", mergeAttribution: true }, profile.quote || {});
+      let lastQuote = -1;
       idx.forEach((j, k) => {
         const it = items[k];
         if (!it || it.type === "skip") return;
+        if (it.type === "equation") return; // persamaan tidak disentuh
+        if (it.type === "quoteAttr" && Q.mergeAttribution && lastQuote >= 0 && Q.attribution === "paren") {
+          // gabungkan atribusi ke akhir kutipan: "… ." (Peran, kode) — lalu hapus paragraf atribusinya
+          const a = E.cleanAttribution(infos[j].text || "");
+          if (a) {
+            const r = paras[lastQuote].insertText(" (" + a + ")", "End");
+            r.font.set({ italic: false, bold: false, name: profile.font, size: E.paraFormat({ type: "quote" }, profile).size });
+            paras[j].delete();
+            n++;
+          }
+          lastQuote = -1;
+          return;
+        }
         const t = (infos[j].text || "").trim();
         // baris persamaan "… (1)" / nomor saja / paragraf gambar: jangan diubah perataannya
         if (/\t/.test(infos[j].text || "") && /\(\d+[a-z]?\)\s*$/.test(t)) return;
         if (t.replace(/[^\p{L}]/gu, "").length < 2) return;
         applyExisting(paras[j], it, profile, infos[j].bold, infos[j].italic);
+        if (it.type === "quote") { fixExistingQuote(paras[j], infos[j].text || "", Q); lastQuote = j; quotesFixed++; } else lastQuote = -1;
         if (it.type === "caption") {
           const m = /^(Table|Tables|Figure|Fig\.|Tabel|Gambar|Grafik|Chart|Diagram)\s+(\d+[A-Za-z]?|[IVX]+)\s*[.:]?/i.exec(t);
           if (m && profile.caption.labelBold) {
@@ -348,8 +365,26 @@
         }
         j = next;
       }
-      return { formatted: n, headings: items.filter((i) => i && i.type === "heading").length, tables: tablesDone, tableErrors };
+      return { formatted: n, headings: items.filter((i) => i && i.type === "heading").length, quotes: quotesFixed, tables: tablesDone, tableErrors };
     });
+  }
+
+  /** Kutipan yang sudah ada: atribusi di belakang tanda kutip -> (…); tanda kutip blok >= 40 kata dihapus. */
+  function fixExistingQuote(p, text, Q) {
+    const t = text.replace(/\s+$/, "");
+    const close = Math.max(t.lastIndexOf("”"), t.lastIndexOf('"'), t.lastIndexOf("»"));
+    const openM = /^\s*([“"«])/.exec(t);
+    const tail = close > 0 ? t.slice(close + 1).trim() : "";
+    if (tail && Q.attribution === "paren" && tail.length < 250 && !/^\(.*\)$/.test(tail)) {
+      const hit = p.search(tail, { matchCase: true }).getLastOrNullObject();
+      hit.insertText("(" + E.cleanAttribution(tail) + ")", "Replace").font.set({ italic: false, bold: false });
+    }
+    const body = close > 0 ? t.slice(openM ? openM.index + 1 : 0, close) : t;
+    if (Q.removeMarks && openM && close > 0 && E.countWords(body) >= (Q.minBlockWords || 40)) {
+      const closeCh = t[close];
+      p.search(closeCh, { matchCase: true }).getLastOrNullObject().delete();
+      p.search(openM[1], { matchCase: true }).getFirstOrNullObject().delete();
+    }
   }
 
   function applyExisting(p, it, profile, curBold, curItalic) {
@@ -366,8 +401,10 @@
     if (it.type === "heading" || it.type === "section") {
       p.font.bold = f.bold;
       if (f.italic) p.font.italic = true;
-    } else if (it.type === "quote" && f.italic) {
-      p.font.italic = true;
+    } else if (it.type === "quote") {
+      if (f.italic) p.font.italic = true;
+      else if (curItalic === true) p.font.italic = false; // APA: kutipan tidak italic
+      if (curBold === true) p.font.bold = false;
     } else if (it.type === "caption") {
       // caption: judul tidak bold/italic (label "Table 1." dibold terpisah)
       if (curBold === true) p.font.bold = false;

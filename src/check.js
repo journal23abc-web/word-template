@@ -91,8 +91,9 @@
   function extractHistory(lines) {
     const out = {};
     for (const ln of lines) {
-      for (const part of String(ln).split(/[;|\n]/)) {
-        const m = /^\s*([A-Za-z][A-Za-z ]{2,30}?)\s*(?:date|tanggal)?\s*[:：]\s*(.+?)\s*$/i.exec(clean(part));
+      for (const part0 of String(ln).split(/[;|\n]/)) {
+        const part = clean(part0).replace(/^[(\[]+/, "").replace(/[)\]]+$/, ""); // "(Received: …; … Accepted: …)"
+        const m = /^\s*([A-Za-z][A-Za-z ]{2,30}?)\s*(?:date|tanggal)?\s*[:：]\s*(.+?)\s*$/i.exec(part);
         if (!m) continue;
         const key = HIST_KEYS.find(([, re]) => re.test(m[1].trim()));
         if (key && !out[key[0]]) out[key[0]] = Object.assign({ text: m[2] }, { date: parseDate(m[2]) });
@@ -240,7 +241,7 @@
     infos.some((p, i) => { if (RE_CITE.test(p.text || "")) { citeText = p.text; citeWhere = p.inTable ? "tabel halaman depan" : "badan dokumen"; return true; } return false; });
     if (!citeText) for (const h of hf) for (const ln of String(h.text).split("\n")) if (!citeText && RE_CITE.test(ln)) { citeText = ln; citeWhere = `${HF_NAME[h.kind]} ${TYPE_NAME[h.type] || ""}`.trim(); }
     let cite = null;
-    if (!citeText) add(G1, "error", "Teks \"To cite this article\" tidak ditemukan", "Dicari di badan dokumen, tabel, header, dan footer.");
+    if (!citeText) add(G1, C.requireCite === false ? "info" : "error", "Teks \"To cite this article\" tidak ditemukan", C.requireCite === false ? "Template jurnal ini tidak memakai cite di halaman depan." : "Dicari di badan dokumen, tabel, header, dan footer.");
     else {
       cite = parseCite(citeText, jName);
       add(G1, "info", "Ditemukan di " + citeWhere, clean(citeText).slice(0, 400));
@@ -409,6 +410,16 @@
       }
     }
     if (!anyHf) add(G3, "info", "Header/footer tidak terbaca");
+    // rentang halaman di header ("Page 57-71") vs penomoran halaman dokumen
+    for (const h of hf) {
+      const m = /\b(?:Page|Pages|pp?\.|Hal(?:aman)?\.?)\s*(\d+)\s*[-–—]\s*(\d+)/i.exec(clean(h.text));
+      if (!m) continue;
+      const a = +m[1], b = +m[2];
+      if (b < a) add(G3, "warn", "Rentang halaman di header terbalik", m[0]);
+      if (meta.startPage && a !== meta.startPage) add(G3, "warn", `Header menulis halaman ${a}–${b}, tetapi penomoran dokumen dimulai dari ${meta.startPage}`, "Atur Page Number Format → Start at: " + a + ", atau perbaiki rentang di header.");
+      if (cite && cite.pageStart && /^\d+$/.test(cite.pageStart) && (+cite.pageStart !== a || (cite.pageEnd && +cite.pageEnd !== b))) add(G3, "error", "Rentang halaman di header berbeda dengan cite", `Header: ${a}–${b} · Cite: ${cite.pageStart}–${cite.pageEnd}`);
+      break;
+    }
     if (issue) add(G3, "info", `Terbitan: Vol. ${issue.volume}, No. ${issue.issue}${issue.monthText ? ", " + issue.monthText : ""}${issue.year ? " " + issue.year : ""}`, hdoi ? "DOI header: " + hdoi : "");
 
     /* ===== Jumlah kata ===== */
