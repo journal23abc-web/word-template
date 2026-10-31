@@ -92,7 +92,7 @@
     document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
       document.querySelectorAll(".tab").forEach((x) => { x.classList.toggle("active", x === b); x.setAttribute("aria-selected", x === b ? "true" : "false"); });
       $("#content").scrollTop = 0;
-      ["paste", "words", "check", "template"].forEach((k) => $("#tab-" + k).classList.toggle("hidden", k !== b.dataset.tab));
+      ["paste", "words", "check", "math", "template"].forEach((k) => $("#tab-" + k).classList.toggle("hidden", k !== b.dataset.tab));
       if (b.dataset.tab === "words") recount();
       if (b.dataset.tab === "check") renderCheckSettings();
     }));
@@ -251,7 +251,9 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
       });
       const txt = document.createElement("div");
       txt.className = "txt";
-      txt.innerHTML = it.type === "abstract" && it.label ? "<b>" + esc(it.label) + " –</b> " + runsHtml(it.runs, 160) : it.type === "table" ? esc(`Tabel ${it.rows.length} baris × ${Math.max(...it.rows.map((r) => r.length))} kolom: ${it.rows[0].join(" | ")}`).slice(0, 200) : runsHtml(it.runs, 180);
+      const mAst = it.type === "equation" && it.math && it.math.ast && window.TplMath;
+      if (mAst) txt.innerHTML = `<math>${TplMath.toMathML(it.math.ast)}</math>` + (it.math.number ? ` <span class="eqnum">(${esc(it.math.number)})</span>` : "");
+      else txt.innerHTML = it.type === "abstract" && it.label ? "<b>" + esc(it.label) + " –</b> " + runsHtml(it.runs, 160) : it.type === "table" ? esc(`Tabel ${it.rows.length} baris × ${Math.max(...it.rows.map((r) => r.length))} kolom: ${it.rows[0].join(" | ")}`).slice(0, 200) : runsHtml(it.runs, 180);
       row.append(sel, txt);
       box.appendChild(row);
     });
@@ -363,7 +365,11 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     setBusy(true);
     try {
       const r = await WordOps.reformatSection(key, state.profile);
-      toast(`✓ ${r.formatted} paragraf dirapikan (${r.headings} sub-heading${r.quotes ? `, ${r.quotes} kutipan` : ""}${r.tables ? `, ${r.tables} tabel` : ""}).` + (r.tableErrors ? ` ${r.tableErrors} tabel gagal dirapikan (mungkin sel gabungan rumit).` : ""), r.tableErrors ? "err" : "ok", 5000);
+      const warn = r.tableErrors || r.equationErrors || r.mathType;
+      toast(`✓ ${r.formatted} paragraf dirapikan (${r.headings} sub-heading${r.quotes ? `, ${r.quotes} kutipan` : ""}${r.tables ? `, ${r.tables} tabel` : ""}${r.equations ? `, ${r.equations} rumus diubah jadi persamaan Word` : ""}).`
+        + (r.tableErrors ? ` ${r.tableErrors} tabel gagal dirapikan (mungkin sel gabungan rumit).` : "")
+        + (r.equationErrors ? ` ${r.equationErrors} rumus gagal diubah — coba blok barisnya lalu pakai tab Rumus.` : "")
+        + (r.mathType ? ` ${r.mathType} rumus berupa objek MathType/Equation 3.0 — tidak bisa diubah otomatis; klik dua kali objeknya lalu simpan ulang sebagai persamaan Word.` : ""), warn ? "err" : "ok", warn ? 9000 : 5000);
     } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
   }
 
@@ -574,6 +580,15 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
       ["leftCm", "Indentasi kiri (cm)", "number", { step: 0.01, min: 0 }],
       ["rightCm", "Indentasi kanan (cm)", "number", { step: 0.01, min: 0 }],
       ...paraFields({}),
+    ] },
+    { title: "Rumus / persamaan", prefix: "equation", fields: [
+      ["autoConvert", "Ubah baris rumus yang ditempel jadi persamaan Word", "bool", { desc: "Contoh: \"Y = β0 + β1X1 + ε (1)\" menjadi persamaan asli. Rumus dari Word/ChatGPT/Wikipedia selalu diubah." }],
+      ["numbering", "Penomoran", "select", { options: [["tab", "(1) rata kanan (tab)"], ["after", "(1) langsung setelah rumus"], ["native", "Penomoran Word 365 (#)"], ["none", "Tanpa nomor"]] }],
+      ["align", "Posisi rumus", "select", { options: [["Centered", "Tengah"], ["Left", "Kiri"]] }],
+      ["textWidthCm", "Lebar area teks (cm) — cadangan bila tidak terbaca dari dokumen", "number", { step: 0.01, min: 5 }],
+      ["size", "Ukuran rumus (pt)", "number", { step: 0.5, min: 6 }],
+      ["before", "Spasi sebelum (pt)", "number", { step: 1, min: 0 }],
+      ["after", "Spasi sesudah (pt)", "number", { step: 1, min: 0 }],
     ] },
     { title: "Tabel yang ditempel", prefix: "table", fields: [
       ["cellAlign", "Perataan isi sel", "select", { options: ALIGN }],
@@ -789,6 +804,161 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     });
   }
 
+  /* ---------------- tab Rumus ---------------- */
+  const SYMBOLS = [
+    ["α", "\\alpha "], ["β", "\\beta "], ["γ", "\\gamma "], ["δ", "\\delta "], ["ε", "\\varepsilon "], ["θ", "\\theta "], ["λ", "\\lambda "], ["μ", "\\mu "], ["σ", "\\sigma "], ["χ", "\\chi "], ["Σ", "\\Sigma "],
+    ["x²", "^{2}"], ["xᵢ", "_{i}"], ["a⁄b", "\\frac{}{}"], ["√", "\\sqrt{}"], ["∑ⁿ", "\\sum_{i=1}^{n} "], ["x̄", "\\bar{}"], ["ŷ", "\\hat{}"],
+    ["×", "\\times "], ["·", "\\cdot "], ["±", "\\pm "], ["≤", "\\leq "], ["≥", "\\geq "], ["≠", "\\neq "], ["≈", "\\approx "], ["∞", "\\infty "], ["( )", "\\left(  \\right)"],
+  ];
+  const mathState = { mode: "display", last: null };
+  const TM = () => window.TplMath;
+
+  function eqCurrent() {
+    const raw = $("#eqInput").value;
+    if (!raw.trim()) return null;
+    if (mathState.grabbed && mathState.grabbed.src === raw) return mathState.grabbed.res;
+    return TM().parse(raw);
+  }
+  function renderEqPreview() {
+    const box = $("#eqPreview");
+    const r = eqCurrent();
+    if (!r) { box.innerHTML = '<span class="muted">Pratinjau rumus muncul di sini.</span>'; return; }
+    if (r.error) { box.innerHTML = `<span class="err">${esc(r.error)}</span>`; return; }
+    if (r.number && !$("#eqNumber").dataset.touched) $("#eqNumber").value = r.number;
+    const num = mathState.mode === "display" && numberingChoice() !== "none" && $("#eqNumber").value.trim() ? `<span class="eqnum">(${esc($("#eqNumber").value.trim().replace(/^\((.*)\)$/, "$1"))})</span>` : "";
+    box.innerHTML = `<div class="eq-render ${mathState.mode}"><math display="${mathState.mode === "display" ? "block" : "inline"}">${TM().toMathML(r.ast)}</math>${num}</div><div class="eq-tex" title="LaTeX">${esc(TM().toLatex(r.ast))}</div>`;
+  }
+  function numberingChoice() {
+    const v = $("#eqNumbering").value;
+    return v === "profile" ? ((state.profile.equation || {}).numbering || "tab") : v;
+  }
+  async function copyText(t, what) {
+    try { await navigator.clipboard.writeText(t); toast(what + " disalin.", "ok"); return; } catch (e) { /* WebView Office: pakai cara lama */ }
+    const ta = document.createElement("textarea");
+    ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    ta.remove();
+    toast(ok ? what + " disalin." : "Tidak bisa menyalin otomatis — salin manual dari kotak rumus.", ok ? "ok" : "err");
+  }
+  function insertAtCaret(ta, snippet) {
+    const a = ta.selectionStart, b = ta.selectionEnd, v = ta.value;
+    const sel = v.slice(a, b);
+    let ins = snippet, caret;
+    const hole = snippet.indexOf("{}");
+    if (hole >= 0) { ins = snippet.slice(0, hole + 1) + sel + snippet.slice(hole + 1); caret = a + hole + 1 + sel.length; }
+    else if (snippet.includes("  ")) { const k = snippet.indexOf("  ") + 1; ins = snippet.slice(0, k) + sel + snippet.slice(k); caret = a + k + sel.length; }
+    else caret = a + ins.length;
+    ta.value = v.slice(0, a) + ins + v.slice(b);
+    ta.focus(); ta.setSelectionRange(caret, caret);
+    mathState.grabbed = null;
+    renderEqPreview();
+  }
+  /** Tempel ke kotak rumus: ambil LaTeX dari HTML (Word/KaTeX/MathJax/Wikipedia) bila ada. */
+  function onEqPaste(ev) {
+    const cd = ev.clipboardData || window.clipboardData;
+    const html = cd && cd.getData("text/html");
+    if (!html || !/msEquation|<math|katex|mjx-container|mwe-math/i.test(html)) return; // teks biasa: biarkan
+    const parsed = E.parseHtml(html);
+    const m = parsed.blocks.map((b) => b.math).filter(Boolean)[0];
+    if (!m || !m.ast) return;
+    ev.preventDefault();
+    const tex = m.tex || TM().toLatex(m.ast);
+    $("#eqInput").value = tex + (m.number ? " \\tag{" + m.number + "}" : "");
+    mathState.grabbed = m.omml ? { src: $("#eqInput").value, res: { ast: m.ast, tex, number: m.number, omml: m.omml } } : null;
+    renderEqPreview();
+    toast("Rumus dari " + (m.source === "word" ? "Word" : "web") + " terbaca.", "ok");
+  }
+  function eqForInsert() {
+    const r = eqCurrent();
+    if (!r) { toast("Tulis atau tempel rumus dulu.", "err"); return null; }
+    if (r.error) { toast(r.error, "err"); return null; }
+    const numbering = numberingChoice();
+    const number = numbering === "none" ? null : ($("#eqNumber").value.trim() || null);
+    return { eq: { ast: r.ast, omml: r.omml, number }, numbering };
+  }
+  async function eqInsert() {
+    if (!needWord()) return;
+    const x = eqForInsert(); if (!x) return;
+    const prof = Object.assign(E.clone(state.profile), { equation: Object.assign({}, state.profile.equation, { numbering: x.numbering }) });
+    setBusy(true);
+    try {
+      await WordOps.insertEquation(x.eq, prof, { mode: mathState.mode });
+      toast(`✓ Rumus disisipkan${x.eq.number && mathState.mode === "display" ? " (" + x.eq.number + ")" : ""}.`, "ok");
+      bumpNumber();
+    } catch (e) { toast("Gagal menyisipkan rumus: " + errMsg(e), "err"); } finally { setBusy(false); }
+  }
+  function bumpNumber() {
+    const inp = $("#eqNumber"), v = inp.value.trim();
+    if (mathState.mode === "display" && /^\d+$/.test(v)) { inp.value = String(+v + 1); inp.dataset.touched = "1"; }
+  }
+  async function eqConvert() {
+    if (!needWord()) return;
+    const numbering = numberingChoice();
+    const prof = Object.assign(E.clone(state.profile), { equation: Object.assign({}, state.profile.equation, { numbering }) });
+    setBusy(true);
+    try {
+      const r = await WordOps.convertSelection(prof, { number: numbering === "none" ? null : $("#eqNumber").value.trim() });
+      toast(r.mode === "inline" ? "✓ Teks terpilih diubah jadi rumus (dalam kalimat)." : `✓ Baris diubah jadi rumus${r.number ? " (" + r.number + ")" : ""}.`, "ok");
+      if (r.mode === "display" && r.number) bumpNumber();
+    } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
+  }
+  async function eqGrab() {
+    if (!needWord()) return;
+    setBusy(true);
+    try {
+      const r = await WordOps.readSelectedEquation();
+      if (!r) { toast("Tidak ada rumus di posisi kursor. Klik di dalam rumus Word lalu coba lagi.", "err"); return; }
+      $("#eqInput").value = r.tex;
+      if (r.number) { $("#eqNumber").value = r.number; $("#eqNumber").dataset.touched = "1"; }
+      mathState.grabbed = null;
+      renderEqPreview();
+      toast(`✓ Rumus diambil${r.count > 1 ? ` (${r.count} rumus digabung)` : ""} — bisa disalin sebagai LaTeX/MathML atau diedit.`, "ok");
+    } catch (e) { toast("Gagal membaca rumus: " + errMsg(e), "err"); } finally { setBusy(false); }
+  }
+  async function eqAutoNumber() {
+    if (!needWord()) return;
+    try { const n = await WordOps.nextEquationNumber(); $("#eqNumber").value = String(n); $("#eqNumber").dataset.touched = "1"; renderEqPreview(); toast("Nomor berikutnya: (" + n + ")"); }
+    catch (e) { toast(errMsg(e), "err"); }
+  }
+  function renderLibrary() {
+    const host = $("#eqLibrary");
+    const groups = {};
+    TM().LIBRARY.forEach((x, i) => (groups[x.group] = groups[x.group] || []).push([x, i]));
+    host.innerHTML = Object.entries(groups).map(([g, xs]) => `<div class="libgroup"><div class="libtitle">${esc(g)}</div><div class="chips">${xs.map(([x, i]) => `<button type="button" class="chip" data-i="${i}" title="${esc(x.tex)}">${esc(x.name)}</button>`).join("")}</div></div>`).join("");
+    host.querySelectorAll(".chip").forEach((b) => b.addEventListener("click", () => {
+      $("#eqInput").value = TM().LIBRARY[+b.dataset.i].tex;
+      mathState.grabbed = null;
+      renderEqPreview();
+      $("#eqInput").focus();
+    }));
+  }
+  function initMath() {
+    if (!TM()) return;
+    const ta = $("#eqInput");
+    let t;
+    ta.addEventListener("input", () => { mathState.grabbed = null; clearTimeout(t); t = setTimeout(renderEqPreview, 150); });
+    ta.addEventListener("paste", onEqPaste);
+    $("#eqSymbols").innerHTML = SYMBOLS.map(([l, s], i) => `<button type="button" class="sym" data-i="${i}" title="${esc(s.trim())}">${esc(l)}</button>`).join("");
+    $("#eqSymbols").querySelectorAll(".sym").forEach((b) => b.addEventListener("click", () => insertAtCaret(ta, SYMBOLS[+b.dataset.i][1])));
+    document.querySelectorAll("#eqModeSeg button").forEach((b) => b.addEventListener("click", () => {
+      mathState.mode = b.dataset.mode;
+      document.querySelectorAll("#eqModeSeg button").forEach((x) => x.classList.toggle("on", x === b));
+      $("#eqNumRow").classList.toggle("hidden", mathState.mode === "inline");
+      renderEqPreview();
+    }));
+    $("#eqNumbering").addEventListener("change", renderEqPreview);
+    $("#eqNumber").addEventListener("input", () => { $("#eqNumber").dataset.touched = $("#eqNumber").value ? "1" : ""; renderEqPreview(); });
+    $("#eqInsert").addEventListener("click", eqInsert);
+    $("#eqConvert").addEventListener("click", eqConvert);
+    $("#eqGrab").addEventListener("click", eqGrab);
+    $("#eqAutoNum").addEventListener("click", eqAutoNumber);
+    const need = (f) => () => { const r = eqCurrent(); if (!r || r.error) { toast("Belum ada rumus yang valid.", "err"); return; } f(r); };
+    $("#eqCopyTex").addEventListener("click", need((r) => copyText(TM().toLatex(r.ast), "LaTeX")));
+    $("#eqCopyMml").addEventListener("click", need((r) => copyText(`<math xmlns="http://www.w3.org/1998/Math/MathML" display="block">${TM().toMathML(r.ast)}</math>`, "MathML")));
+    $("#eqCopyUni").addEventListener("click", need((r) => copyText(TM().toUnicode(r.ast).trim(), "Teks rumus")));
+    renderLibrary();
+  }
+
   /* ---------------- start ---------------- */
   function boot(inWord) {
     state.inWord = inWord;
@@ -796,7 +966,7 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     $("#profileLabel").textContent = state.store.active;
     $("#notInWord").classList.toggle("hidden", inWord);
     state.open[state.profile.sections[0] && state.profile.sections[0].key] = true;
-    initTabs(); initMode(); initProfiles();
+    initTabs(); initMode(); initProfiles(); initMath();
     renderTemplate(); renderSections(); renderLimits(); renderCounts(null);
     $("#insertAll").addEventListener("click", () => doInsert(state.profile.sections.map((s) => s.key)));
     $("#undoLast").addEventListener("click", doUndo);

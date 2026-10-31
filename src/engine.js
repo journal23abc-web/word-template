@@ -54,7 +54,8 @@
     // >= 40 kata = blok menjorok 0,5 in (1,27 cm), tanpa tanda kutip, tidak italic, atribusi (…) setelah tanda baca akhir.
     quote:   { style: "Normal", size: 11, align: "Justified", leftCm: 1.27, rightCm: 0, italic: false, before: 3, after: 3, line: 1,
                apa: 1, minBlockWords: 40, removeMarks: true, attribution: "paren", mergeAttribution: true },
-    equation: { align: "Centered" },
+    // Rumus: disisipkan sebagai persamaan Word asli (OMML). numbering: 'tab' (nomor rata kanan) | 'after' | 'native' (Word 365 "#") | 'none'
+    equation: { align: "Centered", numbering: "tab", textWidthCm: 16.5, size: 11, before: 6, after: 6, autoConvert: true },
     table:   { size: 10, headerBold: true, apaBorders: true, firstColLeft: true, cellAlign: "Centered" },
     references: {
       style: "Normal", size: 11, align: "Justified", hangingCm: 1.27, before: 0, after: 6, line: 1,
@@ -85,6 +86,14 @@
   };
 
   const clone = (o) => JSON.parse(JSON.stringify(o));
+  // TplMath (math.js) — opsional; dimuat sebelum engine.js di task pane
+  let _tm;
+  const TM = () => {
+    if (_tm) return _tm;
+    _tm = (typeof TplMath !== "undefined" && TplMath) || (typeof self !== "undefined" && self.TplMath) || null;
+    if (!_tm && typeof require === "function") { try { _tm = require("./math.js"); } catch (e) { _tm = null; } }
+    return _tm;
+  };
 
   /* Profil bawaan JEPSI — diturunkan dari naskah copyedit Banik & Roy (2026) */
   const JEPSD_PROFILE = (function () {
@@ -92,6 +101,7 @@
     p.journal = { name: "Journal of Education Psychology and Social Development", abbrev: "JEPSI" };
     p.name = "JEPSI (Journal of Education Psychology and Social Development)";
     p.base = "jepsi";
+    p.equation = Object.assign({}, p.equation, { textWidthCm: 15.92 });
     const sp = { before: 0, after: 6, line: 1 };
     Object.assign(p.sectionHeading, { size: 11 }, sp);
     Object.assign(p.h2, sp); Object.assign(p.h3, sp);
@@ -111,6 +121,7 @@
     const p = clone(DEFAULT_PROFILE);
     p.name = "VOICE (Journal of Vocational, Informatics and Computer Education)";
     p.base = "voice";
+    p.equation = Object.assign({}, p.equation, { numbering: "after", textWidthCm: 16.5 }); // contoh template: rumus di tengah, "(1)" langsung setelahnya
     p.journal = { name: "Journal of Vocational, Informatics and Computer Education", abbrev: "VOICE" };
     const sp = { before: 6, after: 6, line: 1 };
     Object.assign(p.sectionHeading, { size: 12 }, sp);
@@ -132,6 +143,7 @@
     const p = clone(DEFAULT_PROFILE);
     p.name = "IJOBER";
     p.base = "ijober";
+    p.equation = Object.assign({}, p.equation, { textWidthCm: 16.0 });
     p.journal = { name: "", abbrev: "IJOBER" };
     p.check = Object.assign({}, p.check, { requireCite: false });
     const sp = { before: 3, after: 3, line: 1 };
@@ -282,11 +294,65 @@
    * @param {DOMParser} [ParserImpl]
    * @returns {{blocks:Array, images:number, tables:number}}
    */
+  /* ---------------- rumus di HTML (Word, KaTeX/ChatGPT, MathJax, Wikipedia, MathML) ---------------- */
+  const MATH_SEL = "[data-tpl-omml], math, .katex, mjx-container, .mwe-math-element";
+  function mathFromEl(el) {
+    const T = TM();
+    if (!T || !el.getAttribute) return null;
+    const tag = el.tagName.toUpperCase();
+    const cls = el.getAttribute("class") || "";
+    const om = el.getAttribute("data-tpl-omml");
+    if (om != null) {
+      const r = T.ommlFromWordHtml(decodeURIComponent(om));
+      if (!r.ok) return { skip: true };
+      const ast = T.ommlXmlToAst(r.xml);
+      if (!ast) return { skip: true }; // OMML rusak
+      return { omml: r.xml, ast, display: r.display, text: T.toUnicode(ast).trim(), source: "word" };
+    }
+    let mathEl = null, display = false, tex = null;
+    if (/\bkatex-display\b/.test(cls)) { display = true; mathEl = el.querySelector("math"); }
+    else if (/(^|\s)katex(\s|$)/.test(cls)) { mathEl = el.querySelector("math"); display = !!(el.closest && el.closest(".katex-display")); }
+    else if (tag === "MJX-CONTAINER") { mathEl = el.querySelector("math"); display = el.getAttribute("display") === "true"; }
+    else if (/\bmwe-math-element\b/.test(cls)) {
+      mathEl = el.querySelector("math");
+      display = !!el.querySelector('[class*="display"]');
+      if (!mathEl) { const img = el.querySelector("img[alt]"); if (img) tex = img.getAttribute("alt"); }
+    } else if (tag === "MATH") { mathEl = el; display = el.getAttribute("display") === "block"; }
+    else if (/\bkatex-html\b|\bMathJax_Preview\b/.test(cls)) return { skip: true };
+    else return null;
+    let ast = null, number = null;
+    if (mathEl) {
+      const alt = mathEl.getAttribute("alttext");
+      const fm = T.fromMathML(mathEl);
+      if (fm.tex) tex = fm.tex; else if (alt) tex = alt; else ast = fm.ast;
+    }
+    if (tex != null) { const r = T.parse(tex); if (r.error) return { skip: true }; ast = r.ast; number = r.number; }
+    if (!ast) return { skip: true };
+    return { ast, tex: tex || T.toLatex(ast), number, display, text: T.toUnicode(ast).trim(), source: "web" };
+  }
+  const RE_EQNUM = /^\s*\(\s*(\d+[a-z]?)\s*\)\s*$/;
+  /** "(1)" di paragraf tersendiri tepat setelah rumus -> nomor rumus tsb. */
+  function attachEquationNumbers(blocks) {
+    const out = [];
+    for (const b of blocks) {
+      const prev = out[out.length - 1];
+      const t = b.kind === "p" ? plain(b.runs) : "";
+      if (prev && prev.math && !prev.math.number && RE_EQNUM.test(t)) { prev.math = Object.assign({}, prev.math, { number: RE_EQNUM.exec(t)[1] }); continue; }
+      out.push(b);
+    }
+    return out;
+  }
+
   function parseHtml(html, ParserImpl, opts) {
     opts = opts || {};
     const P = ParserImpl || (typeof DOMParser !== "undefined" ? DOMParser : null);
     // Buang komentar kondisional Word & fragment marker
-    html = String(html).replace(/<!--\[if[\s\S]*?<!\[endif\]-->/gi, "").replace(/<!--[\s\S]*?-->/g, "");
+    html = String(html)
+      // persamaan Word: OMML ada di komentar kondisional; gambar pengganti dibuang
+      .replace(/<!--\[if gte msEquation \d+\]>([\s\S]*?)<!\[endif\]-->/gi, (m, x) => `<span data-tpl-omml="${encodeURIComponent(x)}"></span>`)
+      .replace(/<!\[if !msEquation\]>[\s\S]*?<!\[endif\]>/gi, "")
+      .replace(/<!--\[if !msEquation\]-->[\s\S]*?<!--\[endif\]-->/gi, "")
+      .replace(/<!--\[if[\s\S]*?<!\[endif\]-->/gi, "").replace(/<!--[\s\S]*?-->/g, "");
     const doc = new P().parseFromString(html, "text/html");
     const blocks = [];
     let cur = null;
@@ -296,9 +362,21 @@
     const flush = () => {
       if (cur && cur.runs.length) {
         const runs = normalizeRuns(cur.runs);
-        if (runs.length) blocks.push({ kind: "p", tag: cur.tag, cls: cur.cls, runs, html: true });
+        // paragraf yang isinya hanya satu rumus (+ nomor "(1)") -> rumus baris tersendiri
+        const mp = cur.maths || [];
+        const rest = cur.runs.filter((r) => !r.math).map((r) => r.text).join("");
+        const numM = /^\s*\(\s*(\d+[a-z]?)\s*\)\s*$/.exec(rest);
+        if (mp.length === 1 && (!rest.trim() || numM)) {
+          const m = Object.assign({}, mp[0], { display: true });
+          if (numM && !m.number) m.number = numM[1];
+          blocks.push({ kind: "p", tag: "p", cls: "", runs: [{ text: m.text || "[rumus]", b: false, i: false }], html: true, math: m });
+        } else if (runs.length) blocks.push({ kind: "p", tag: cur.tag, cls: cur.cls, runs, html: true });
       }
       cur = null;
+    };
+    const pushMathBlock = (m) => {
+      flush();
+      blocks.push({ kind: "p", tag: "p", cls: "", runs: [{ text: m.text || "[rumus]", b: false, i: false }], html: true, math: m });
     };
     const ensure = (tag, cls) => { if (!cur) cur = { tag: tag || "p", cls: cls || "", runs: [] }; };
 
@@ -314,6 +392,17 @@
       if (node.nodeType !== 1) return;
       const el = node;
       const tag = el.tagName.toUpperCase();
+      const mth = mathFromEl(el);
+      if (mth) {
+        if (mth.skip) return;
+        if (mth.display) pushMathBlock(mth);
+        else {
+          ensure(blockTag, blockCls);
+          cur.runs.push({ text: mth.text || "", b: false, i: false, sup: false, sub: false, link: "", math: true });
+          (cur.maths = cur.maths || []).push(mth);
+        }
+        return;
+      }
       if (SKIP.has(tag)) return;
       if (/mso-list\s*:\s*ignore/i.test(el.getAttribute("style") || "")) return; // nomor/bullet palsu dari Word
       // daftar catatan kaki/akhir & komentar dari clipboard Word
@@ -326,6 +415,20 @@
         // Tabel 1 sel (mis. teks yang disalin dari dalam kotak/sel) atau mode "ratakan" (abstrak):
         // isi sel diperlakukan sebagai paragraf biasa, bukan tabel data.
         const allCells = Array.from(el.querySelectorAll("td,th")).filter((td) => td.closest("table") === el);
+        // tabel penomoran rumus (| rumus | (1) |) -> satu rumus bernomor
+        const trs = Array.from(el.querySelectorAll("tr")).filter((tr) => tr.closest("table") === el);
+        const mEl = trs.length === 1 ? el.querySelector(MATH_SEL) : null;
+        if (mEl) {
+          const m = mathFromEl(mEl);
+          if (m && !m.skip) {
+            const others = allCells.filter((td) => !td.contains(mEl)).map((td) => (td.textContent || "").replace(WS, " ").trim()).filter(Boolean);
+            if (others.every((t) => /^\(\s*\d+[a-z]?\s*\)$/.test(t))) {
+              const n = others.length ? /\d+[a-z]?/.exec(others[0])[0] : null;
+              pushMathBlock(Object.assign({}, m, { display: true, number: m.number || n }));
+              return;
+            }
+          }
+        }
         if (opts.flattenTables || allCells.length <= 1) {
           for (const td of allCells) { for (const c of td.childNodes) walk(c, fmt, "p", ""); flush(); }
           return;
@@ -375,7 +478,7 @@
     const bodyEl = doc.body || doc.documentElement;
     for (const c of bodyEl.childNodes) walk(c, {}, "p", "");
     flush();
-    return { blocks, images, tables, source: "html" };
+    return { blocks: attachEquationNumbers(blocks), images, tables, source: "html" };
   }
 
   /* ------------------------------------------------------------------ */
@@ -405,6 +508,17 @@
     opts = opts || {};
     const merge = opts.mergeBrokenLines !== false;
     text = String(text).replace(/\r\n?/g, "\n").replace(/\u2028|\u2029/g, "\n");
+    // rumus LaTeX (ChatGPT/Markdown): $$…$$, \[…\], \begin{equation}…  -> rumus baris; \(…\) dan $…$ -> teks Unicode
+    const maths = [];
+    const T = TM();
+    if (T && /\$|\\[[(]|\\begin\{/.test(text)) {
+      const hold = (tex) => { maths.push(tex); return "\n\u0001M" + (maths.length - 1) + "\u0001\n"; };
+      text = text.replace(/\$\$([\s\S]+?)\$\$|\\\[([\s\S]+?)\\\]/g, (m, a, b) => hold(a != null ? a : b));
+      text = text.replace(/\\begin\{(equation|align|gather|multline)(\*?)\}[\s\S]*?\\end\{\1\2\}/g, (m) => hold(m));
+      const uni = (m, tex) => { const r = T.parse(tex); return r.error ? m : T.toUnicode(r.ast).trim(); };
+      text = text.replace(/\\\(([\s\S]+?)\\\)/g, uni);
+      text = text.replace(/\$([^\s$](?:[^$\n]*?[^\s$])?)\$/g, (m, tex) => (/[\\^_{}]/.test(tex) || /^[A-Za-z]$/.test(tex) ? uni(m, tex) : m));
+    }
     const rawLines = text.split("\n");
     const hasBlankSep = /\n[ \t ]*\n/.test(text.trim());
     let paras = [];
@@ -426,8 +540,18 @@
       if (merge && ls.length > 2) paras = mergeLines(ls);
       else paras = ls;
     }
+    if (maths.length) paras = paras.flatMap((p) => p.split(/\s*(\u0001M\d+\u0001)\s*/).filter((x) => x.trim()));
     const blocks = [];
     for (let p of paras) {
+      const mm = /^\u0001M(\d+)\u0001$/.exec(p);
+      if (mm) {
+        const r = T.parse(maths[+mm[1]]);
+        if (!r.error) {
+          const text0 = T.toUnicode(r.ast).trim();
+          blocks.push({ kind: "p", tag: "p", cls: "", runs: [{ text: text0, b: false, i: false, sup: false, sub: false, link: "" }], math: { ast: r.ast, tex: r.tex, number: r.number, display: true, text: text0, source: "latex" } });
+        }
+        continue;
+      }
       let tag = "p";
       const h = /^(#{1,6})\s+(.*)$/.exec(p);
       if (h) { tag = "h" + h[1].length; p = h[2]; }
@@ -435,7 +559,7 @@
       const runs = normalizeRuns(mdInline(p).map((r) => ({ text: r.text, b: !!r.b, i: !!r.i, sup: false, sub: false, link: "" })));
       if (runs.length) blocks.push({ kind: "p", tag, cls: "", runs, md: !!h });
     }
-    return { blocks, images: 0, tables: 0, source: "text" };
+    return { blocks: attachEquationNumbers(blocks), images: 0, tables: 0, source: "text" };
   }
 
   function joinLines(ls) {
@@ -482,7 +606,7 @@
     const isRef = sec && sec.kind === "references";
     const html = clip.html || "";
     // HTML dipakai bila memuat struktur paragraf; jika tidak, pakai teks biasa
-    if (html && /<(p|div|h[1-6]|li|br|table|tr)\b/i.test(html)) {
+    if (html && (/<(p|div|h[1-6]|li|br|table|tr|dd|dt|blockquote|math|mjx-container)\b/i.test(html) || /katex|mwe-math|msEquation/i.test(html))) {
       const r = parseHtml(html, ParserImpl, { flattenTables: !!(sec && sec.kind === "abstract") });
       if (r.blocks.length) return r;
     }
@@ -610,6 +734,7 @@
     for (let idx = 0; idx < blocks.length; idx++) {
       const bl = blocks[idx];
       if (bl.kind === "table") { items.push({ type: "table", rows: bl.rows, runs: [] }); continue; }
+      if (bl.math) { items.push({ type: "equation", runs: bl.runs, math: bl.math }); continue; }
       let runs = bl.runs;
       const text = plain(runs);
       if (!text.trim()) continue;
@@ -887,11 +1012,73 @@
     a = a.replace(/\s*\(([^()]*)\)/g, (m, x) => ", " + x.trim()).replace(/^,\s*/, "").replace(/,\s*,/g, ",");
     return a;
   }
+  /**
+   * Rumus -> it.eq = { omml?, ast, number } untuk disisipkan sebagai persamaan Word.
+   * Rumus dari teks biasa ("Y = β0 + β1X1 + ε (1)") ikut diubah bila equation.autoConvert aktif.
+   */
+  function prepareEquation(it, profile) {
+    const Q = profile.equation || {};
+    const T = TM();
+    if (!T || Q.autoConvert === false && !it.math) return it;
+    if (it.math) return Object.assign({}, it, { eq: { omml: it.math.omml, ast: it.math.ast, number: it.math.number || null } });
+    const text = plain(it.runs || []).trim();
+    if (!text || RE_EQNUM.test(text)) return it; // nomor saja -> biarkan
+    // subskrip/superskrip dari format tempelan (β<sub>1</sub>) ikut dipakai
+    const runs = it.runs || [];
+    const mixed = runs.some((x) => x.sub || x.sup)
+      ? runs.map((x) => (x.sub ? "_{" + x.text.trim() + "}" : x.sup ? "^{" + x.text.trim() + "}" : x.text)).join("").trim()
+      : text;
+    const r = T.parse(mixed, { forceLinear: mixed !== text });
+    if (r.error || !r.ast) return it;
+    return Object.assign({}, it, { eq: { ast: r.ast, number: r.number } });
+  }
+  /**
+   * Runs (teks + sub/superskrip) dari OOXML satu paragraf Word — untuk "Rapikan" rumus yang masih berupa teks.
+   * Tanpa DOMParser (dipakai juga di uji Node).
+   */
+  function runsFromOoxml(xml) {
+    let x = String(xml || "");
+    const b = x.indexOf("<w:body>"), e = x.lastIndexOf("</w:body>");
+    if (b >= 0 && e > b) x = x.slice(b, e);
+    const dec = (t) => t.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (m, n) => String.fromCodePoint(+n)).replace(/&#x([0-9a-f]+);/gi, (m, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&amp;/g, "&");
+    const runs = [];
+    const re = /<w:r[\s>][\s\S]*?<\/w:r>/g;
+    let m;
+    while ((m = re.exec(x))) {
+      const r = m[0];
+      const va = /<w:vertAlign w:val="(superscript|subscript)"/.exec(r);
+      let text = "";
+      r.replace(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>|<w:tab\/>/g, (mm, t) => { text += t != null ? dec(t) : "\t"; return mm; });
+      if (!text) continue;
+      runs.push({ text, b: /<w:b\/>|<w:b w:val="(1|true|on)"/.test(r), i: /<w:i\/>|<w:i w:val="(1|true|on)"/.test(r), sup: !!va && va[1] === "superscript", sub: !!va && va[1] === "subscript" });
+    }
+    return runs;
+  }
+  /** Isi paragraf yang bukan teks biasa: rumus Word, objek (MathType/OLE), gambar. */
+  function ooxmlKinds(xml) {
+    const x = String(xml || "");
+    return {
+      omml: /<m:oMath[\s>]/.test(x),
+      ole: /<w:object[\s>]|<o:OLEObject\b/.test(x),
+      mathType: /ProgID="Equation\.(DSMT\d*|3)"/i.test(x),
+      picture: /<w:drawing[\s>]|<w:pict[\s>]/.test(x),
+    };
+  }
+  /** Opsi buildEquationParagraph dari profil. */
+  function equationOptions(profile, extra) {
+    const Q = profile.equation || {};
+    return Object.assign({
+      numbering: Q.numbering || "tab", textWidthCm: +Q.textWidthCm || 16, align: Q.align || "Centered",
+      font: profile.font, color: profile.color, size: +Q.size || (profile.body && profile.body.size) || 11,
+      before: Q.before != null ? +Q.before : 6, after: Q.after != null ? +Q.after : 6, line: 1,
+    }, extra || {});
+  }
   function prepareItems(items, profile) {
     const Q = Object.assign({ minBlockWords: 40, removeMarks: true, attribution: "paren", mergeAttribution: true }, profile.quote || {});
     const out = [];
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
+      if (it.type === "equation") { out.push(prepareEquation(it, profile)); continue; }
       if (it.type !== "quote") {
         if (it.type === "quoteAttr" && !Q.mergeAttribution) out.push(it);
         else if (it.type !== "quoteAttr") out.push(it);
@@ -1213,7 +1400,7 @@
     classifyAbstract, abstractParagraphs, pickAbstractTarget, abstractTargetsInCell, isAbstractNoise, RE_ABSTRACT_HEAD,
     DEFAULT_PROFILE, PRESETS, presetFor, mergeProfile, clone,
     parseInput, parseHtml, parseText, classify, classifyReferences, classifyExisting,
-    paraFormat, finalRuns, prepareItems, cleanAttribution, looksLikeEquation, looksLikeAttribution, countWords, plain, normalizeRuns, titleCase, apaAutoItalic, linkUrls,
+    paraFormat, finalRuns, prepareItems, prepareEquation, equationOptions, runsFromOoxml, ooxmlKinds, cleanAttribution, looksLikeEquation, looksLikeAttribution, countWords, plain, normalizeRuns, titleCase, apaAutoItalic, linkUrls,
     findSectionHeadings, sectionRange, pickAnchor, planNewSection, countDocument, normHead,
     CM,
   };

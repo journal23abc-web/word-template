@@ -123,7 +123,7 @@
     opts = opts || {};
     const items = E.prepareItems(items0, profile); // kutipan: format APA 7
     let cursor = start, cursorIsTable = false, detachNext = !!opts.anchorIsList;
-    let first = null, last = null, count = 0, sinceSync = 0;
+    let first = null, last = null, count = 0, sinceSync = 0, equations = 0;
     const tables = [];
     for (const it of items) {
       if (it.type === "skip") continue;
@@ -140,6 +140,16 @@
         const tbl = host.insertTable(vals.length, vals[0].length, hostLoc, vals);
         tables.push({ table: tbl });
         first = first || tbl; last = tbl; cursor = tbl; cursorIsTable = true; loc = "After"; count++;
+      } else if (it.type === "equation" && it.eq && M()) {
+        // rumus -> persamaan Word asli (OMML)
+        const p = cursor.insertParagraph("", loc);
+        if (detachNext) { p.detachFromList(); detachNext = false; }
+        if (opts.textWidthCm == null) opts.textWidthCm = await readTextWidthCm(context);
+        const pkg = M().buildEquationPackage(it.eq, E.equationOptions(profile, { number: it.eq.number, textWidthCm: opts.textWidthCm || undefined }));
+        const eqp = await placeEquation(context, p, pkg);
+        first = first || eqp; last = eqp; cursor = eqp; cursorIsTable = false; loc = "After"; count++; equations++;
+        sinceSync = 0;
+        continue;
       } else {
         const p = cursor.insertParagraph("", loc);
         if (detachNext) { p.detachFromList(); detachNext = false; } // jangan ikut jadi daftar bernomor
@@ -155,7 +165,55 @@
       for (const t of tables) formatTable(t, profile);
       await context.sync();
     }
-    return { first, last, count, endsWithTable: cursorIsTable };
+    return { first, last, count, equations, endsWithTable: cursorIsTable };
+  }
+
+  /* ---------------- rumus (OMML) ---------------- */
+  const M = () => root.TplMath || null;
+  let _widthCache = null;
+  /** Lebar area teks (cm) dari pgSz/pgMar di OOXML paragraf terakhir; null bila tidak terbaca. */
+  async function readTextWidthCm(context) {
+    if (_widthCache) return _widthCache;
+    try {
+      const last = context.document.body.paragraphs.getLast();
+      const ox = last.getRange("Whole").getOoxml();
+      await context.sync();
+      const sz = /<w:pgSz\b[^>]*\bw:w="(\d+)"/.exec(ox.value), mar = /<w:pgMar\b[^>]*>/.exec(ox.value);
+      if (!sz || !mar) return null;
+      const l = /w:left="(-?\d+)"/.exec(mar[0]), r = /w:right="(-?\d+)"/.exec(mar[0]), g = /w:gutter="(\d+)"/.exec(mar[0]);
+      const tw = +sz[1] - (l ? +l[1] : 0) - (r ? +r[1] : 0) - (g ? +g[1] : 0);
+      if (!(tw > 2000)) return null;
+      _widthCache = Math.round((tw / 567) * 100) / 100;
+      return _widthCache;
+    } catch (e) { return null; }
+  }
+  const hasMathXml = (x) => /<m:oMath[\s>]/.test(x || "");
+  /**
+   * Ganti paragraf kosong `p` dengan paragraf persamaan dari paket OOXML.
+   * Word kadang menambah satu paragraf kosong setelah sisipan OOXML — dibersihkan di sini.
+   * return paragraf persamaan.
+   */
+  async function placeEquation(context, p, pkg) {
+    const next = p.getNextOrNullObject();
+    next.load("isNullObject");
+    await context.sync();
+    p.insertOoxml(pkg, "Replace");
+    await context.sync();
+    const lastP = next.isNullObject ? context.document.body.paragraphs.getLast() : next.getPreviousOrNullObject();
+    lastP.load("text,isNullObject");
+    await context.sync();
+    if (lastP.isNullObject) return p;
+    if ((lastP.text || "").trim()) return lastP;
+    const prevP = lastP.getPreviousOrNullObject();
+    prevP.load("text,isNullObject");
+    const oxLast = lastP.getRange("Whole").getOoxml();
+    await context.sync();
+    if (hasMathXml(oxLast.value)) return lastP;
+    if (prevP.isNullObject) return lastP;
+    const oxPrev = prevP.getRange("Whole").getOoxml();
+    await context.sync();
+    if (hasMathXml(oxPrev.value)) { lastP.delete(); await context.sync(); return prevP; }
+    return lastP;
   }
 
   /* ---------------- membaca struktur dokumen ---------------- */
@@ -342,6 +400,10 @@
       });
       await context.sync();
 
+      // rumus: baris rumus berupa teks -> persamaan Word; nomor "(1)" di baris terpisah digabung
+      const eqRes = await fixEquations(context, paras, infos, idx, items, profile);
+      n += eqRes.converted;
+
       // tabel di bagian ini — jalan dari paragraf tabel pertama, lompati seluruh paragraf tabel itu
       let tablesDone = 0, tableErrors = 0;
       for (let j = range.start + 1; j < range.end; ) {
@@ -365,8 +427,57 @@
         }
         j = next;
       }
-      return { formatted: n, headings: items.filter((i) => i && i.type === "heading").length, quotes: quotesFixed, tables: tablesDone, tableErrors };
+      return { formatted: n, headings: items.filter((i) => i && i.type === "heading").length, quotes: quotesFixed, tables: tablesDone, tableErrors,
+        equations: eqRes.converted, equationsOk: eqRes.alreadyOk, mathType: eqRes.mathType, equationErrors: eqRes.errors };
     });
+  }
+
+  /**
+   * Rapikan rumus di bagian: rumus yang masih teks biasa (Y = β0 + β1X1 + ε) diubah jadi persamaan Word
+   * dengan penomoran template; nomor "(1)" yang terpisah di baris berikutnya ikut digabung.
+   * Rumus Word yang sudah benar tidak disentuh; objek MathType/gambar hanya dihitung (tidak bisa diubah).
+   */
+  async function fixEquations(context, paras, infos, idx, items, profile) {
+    const res = { converted: 0, alreadyOk: 0, mathType: 0, errors: 0 };
+    if (!M() || (profile.equation && profile.equation.autoConvert === false)) return res;
+    const RE_NUM = /^\s*\(\s*(\d+[a-z]?)\s*\)\s*$/;
+    // kandidat: paragraf rumus + paragraf kosong / "(n)" (bisa berisi objek MathType)
+    const cand = [];
+    idx.forEach((j, k) => {
+      const t = (infos[j].text || "").trim();
+      if ((items[k] && items[k].type === "equation") || !t || RE_NUM.test(t)) cand.push({ j, k, t });
+    });
+    if (!cand.length) return res;
+    const ox = cand.map((c) => paras[c.j].getRange("Whole").getOoxml());
+    await context.sync();
+    cand.forEach((c, i) => { c.xml = ox[i].value; c.kinds = E.ooxmlKinds(c.xml); });
+    const byJ = new Map(cand.map((c) => [c.j, c]));
+    res.mathType = cand.filter((c) => c.kinds.mathType || (c.kinds.ole && !c.t.replace(RE_NUM, ""))).length;
+    let width = null;
+    // dari bawah ke atas
+    for (let i = cand.length - 1; i >= 0; i--) {
+      const c = cand[i];
+      if (!c.t || RE_NUM.test(c.t)) continue; // kosong / nomor saja
+      if (c.kinds.omml) { res.alreadyOk++; continue; }
+      if (c.kinds.ole || c.kinds.picture) continue;
+      const k = c.k;
+      if (!items[k] || items[k].type !== "equation") continue;
+      // nomor di paragraf berikutnya ("(1)" sendirian, tanpa objek/gambar)
+      const nx = byJ.get(c.j + 1);
+      const sepNum = nx && RE_NUM.test(nx.t) && !nx.kinds.omml && !nx.kinds.ole && !nx.kinds.picture ? RE_NUM.exec(nx.t)[1] : null;
+      const runs = E.runsFromOoxml(c.xml);
+      const it = E.prepareEquation({ type: "equation", runs: runs.length ? runs : [{ text: infos[c.j].text }] }, profile);
+      if (!it.eq) continue;
+      const number = it.eq.number || sepNum || null;
+      try {
+        if (width == null) width = (await readTextWidthCm(context)) || 0;
+        const pkg = M().buildEquationPackage({ ast: it.eq.ast }, E.equationOptions(profile, { number, textWidthCm: width || undefined }));
+        await placeEquation(context, paras[c.j], pkg);
+        if (sepNum && !it.eq.number) { paras[c.j + 1].delete(); await context.sync(); }
+        res.converted++;
+      } catch (e) { res.errors++; console.warn("rumus gagal diubah", e); }
+    }
+    return res;
   }
 
   /** Kutipan yang sudah ada: atribusi di belakang tanda kutip -> (…); tanda kutip blok >= 40 kata dihapus. */
@@ -694,5 +805,124 @@
     });
   }
 
-  root.WordOps = { collectMeta, scan, insertSection, reformatSection, clearSection, restoreSection, insertAbstract, clearAbstract, restoreAbstract, countWords, undoLast, _internal: { insertItems, formatNewParagraph, setStyle } };
+  /* ---------------- tab Rumus ---------------- */
+  /** Nomor rumus berikutnya: (n) terbesar di akhir paragraf rumus + 1. */
+  async function nextEquationNumber() {
+    return Word.run(async (context) => {
+      const paras = context.document.body.paragraphs;
+      paras.load("items/text");
+      await context.sync();
+      let max = 0;
+      for (const p of paras.items) {
+        const t = (p.text || "").trim();
+        if (t.length > 400) continue;
+        const m = /(?:^|[\s\t#)\]}])\((\d{1,3})[a-z]?\)$/.exec(t);
+        if (!m) continue;
+        const body = t.slice(0, t.length - m[0].length + 1);
+        if (/[=≤≥≈<>]/.test(body) || /\t/.test(p.text) || E.looksLikeEquation(t)) max = Math.max(max, +m[1]);
+      }
+      return max + 1;
+    });
+  }
+
+  /**
+   * Sisipkan rumus di posisi kursor.
+   * eq: {ast|omml, number}; opts.mode: 'display' (paragraf sendiri) | 'inline' (di dalam kalimat)
+   */
+  async function insertEquation(eq, profile, opts) {
+    opts = opts || {};
+    return Word.run(async (context) => {
+      const sel = context.document.getSelection();
+      if (opts.mode === "inline") {
+        const pkg = M().buildEquationPackage(eq, E.equationOptions(profile, { mode: "inline" }));
+        const r = sel.insertOoxml(pkg, "Replace");
+        await context.sync();
+        try { r.select("End"); await context.sync(); } catch (e) { /* abaikan */ }
+        return { mode: "inline" };
+      }
+      const cur = sel.paragraphs.getLast();
+      cur.load("text");
+      await context.sync();
+      const target = (cur.text || "").trim() ? cur.insertParagraph("", "After") : cur;
+      const width = await readTextWidthCm(context);
+      const pkg = M().buildEquationPackage(eq, E.equationOptions(profile, { number: eq.number, textWidthCm: width || undefined }));
+      const eqp = await placeEquation(context, target, pkg);
+      try { eqp.getRange("End").select("End"); await context.sync(); } catch (e) { /* abaikan */ }
+      return { mode: "display", number: eq.number, textWidthCm: width };
+    });
+  }
+
+  /** Teks terpilih -> rumus. Seluruh paragraf terpilih = rumus baris (nomor "(n)" di akhir dipertahankan). */
+  async function convertSelection(profile, opts) {
+    opts = opts || {};
+    return Word.run(async (context) => {
+      const sel = context.document.getSelection();
+      sel.load("text");
+      const ps = sel.paragraphs;
+      ps.load("items/text");
+      await context.sync();
+      const text = (sel.text || "").trim();
+      if (!text) throw new Error("Pilih (blok) dulu teks rumus di dokumen.");
+      if (ps.items.length > 1) throw new Error("Pilih satu baris rumus saja.");
+      const r = M().parse(text);
+      if (r.error) throw new Error(r.error);
+      const p = ps.items[0];
+      const whole = (p.text || "").trim() === text;
+      if (!whole || opts.mode === "inline") {
+        const pkg = M().buildEquationPackage({ ast: r.ast }, E.equationOptions(profile, { mode: "inline" }));
+        sel.insertOoxml(pkg, "Replace");
+        await context.sync();
+        return { mode: "inline", tex: r.tex };
+      }
+      const number = r.number || (opts.number != null && opts.number !== "" ? opts.number : null);
+      const width = await readTextWidthCm(context);
+      const pkg = M().buildEquationPackage({ ast: r.ast }, E.equationOptions(profile, { number, textWidthCm: width || undefined }));
+      await placeEquation(context, p, pkg);
+      return { mode: "display", tex: r.tex, number };
+    });
+  }
+
+  /** Ambil rumus Word yang sedang dipilih -> { ast, tex, number, count } (null bila tidak ada). */
+  async function readSelectedEquation() {
+    return Word.run(async (context) => {
+      const sel = context.document.getSelection();
+      let ox = sel.getOoxml();
+      const ps = sel.paragraphs; ps.load("items/text");
+      await context.sync();
+      let xml = ox.value;
+      if (!hasMathXml(xml) && ps.items.length) { // kursor di dalam/di samping rumus -> ambil paragrafnya
+        ox = ps.items[0].getRange("Whole").getOoxml();
+        await context.sync();
+        xml = ox.value;
+      }
+      if (!hasMathXml(xml)) return null;
+      const doc = new DOMParser().parseFromString(xml, "application/xml");
+      const MNS = "http://schemas.openxmlformats.org/officeDocument/2006/math";
+      const all = Array.from(doc.getElementsByTagNameNS(MNS, "oMath"));
+      if (!all.length) return null;
+      const T = M();
+      const asts = all.map((om) => T.ommlToAst(om));
+      let ast = asts.length === 1 ? asts[0] : { t: "row", items: asts };
+      // nomor: "#(n)" bawaan Word atau "(n)" teks setelah rumus
+      let number = null;
+      const flat = T.toLatex(ast);
+      const nm = /#\\left\(\s*(\d+[a-z]?)\s*\\right\)\s*$/.exec(flat) || /#\(\s*(\d+[a-z]?)\s*\)\s*$/.exec(flat);
+      if (nm) {
+        number = nm[1];
+        // buang "#(n)" dari AST (eqArr satu baris)
+        const strip = (n) => { if (n && n.t === "eqarr" && n.rows.length === 1) return strip(n.rows[0]); return n; };
+        ast = strip(ast);
+        if (ast.t === "row") { const it = ast.items; while (it.length && !(it[it.length - 1].t === "id" && /#/.test(it[it.length - 1].v))) it.pop(); if (it.length) { const last = it[it.length - 1]; last.v = last.v.replace(/#\s*$/, ""); if (!last.v) it.pop(); } }
+      } else {
+        const tail = xml.slice(xml.lastIndexOf("</m:oMath>"));
+        const tailText = (tail.match(/<w:t[^>]*>[^<]*<\/w:t>/g) || []).map((x) => x.replace(/<[^>]+>/g, "")).join("");
+        const pt = ps.items.length ? (ps.items[0].text || "") : "";
+        const m2 = /\(\s*(\d{1,3}[a-z]?)\s*\)\s*$/.exec(tailText) || /\((\d{1,3}[a-z]?)\)\s*$/.exec(pt);
+        if (m2) number = m2[1];
+      }
+      return { ast, tex: T.toLatex(ast), number, count: all.length };
+    });
+  }
+
+  root.WordOps = { insertEquation, convertSelection, readSelectedEquation, nextEquationNumber, collectMeta, scan, insertSection, reformatSection, clearSection, restoreSection, insertAbstract, clearAbstract, restoreAbstract, countWords, undoLast, _internal: { insertItems, formatNewParagraph, setStyle, placeEquation, readTextWidthCm } };
 })(typeof self !== "undefined" ? self : this);
