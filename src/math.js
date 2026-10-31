@@ -99,6 +99,7 @@
     else if (/^\[\s[\s\S]*\\[a-zA-Z][\s\S]*\s\]$/.test(t)) t = t.replace(/^\[\s+/, "").replace(/\s+\]$/, "");
     t = t.replace(/(^|[^\\])!(?=\\(?:left|right|big|Big|bigg|Bigg)\b)/g, "$1");
     t = t.replace(/(^|[^\\])\\[ \t]*\n/g, "$1\\\\\n");
+    t = t.replace(/(\d{3,}),(?=\\?[A-Za-z])/g, "$1\\,"); // "1000,t" (aslinya 1000\,t)
     // di dalam aligned/cases/matrix tanpa "\\" sama sekali: "\ " adalah ganti baris yang kehilangan satu backslash
     t = t.replace(/(\\begin\{(aligned|align\*?|gathered|cases|[pbvBV]?matrix|array)\}(?:\{[^}]*\})?)([\s\S]*?)(\\end\{\2\})/g, (m, a, env, body, z) =>
       /\\\\/.test(body) ? m : a + body.replace(/(^|[^\\])\\(?=\s)/g, "$1\\\\") + z);

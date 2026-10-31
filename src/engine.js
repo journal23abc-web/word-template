@@ -645,10 +645,45 @@
     // HTML dipakai bila memuat struktur paragraf; jika tidak, pakai teks biasa
     if (html && (/<(p|div|h[1-6]|li|br|table|tr|dd|dt|blockquote|math|mjx-container)\b/i.test(html) || /katex|mwe-math|msEquation/i.test(html))) {
       const r = parseHtml(html, ParserImpl, { flattenTables: !!(sec && sec.kind === "abstract") });
-      if (r.blocks.length) return isRef ? r : recoverLatex(r);
+      if (r.blocks.length) return isRef ? r : recoverFlatTables(recoverLatex(r));
     }
     const r = parseText(clip.text || "", { mergeBrokenLines: profile.detect.mergeBrokenLines && !isRef });
-    return isRef ? r : recoverLatex(r);
+    return isRef ? r : recoverFlatTables(recoverLatex(r));
+  }
+
+  /* ---------------- tabel yang tersalin sebagai baris-baris teks ---------------- */
+  /**
+   * "Table 4. …" lalu sel-sel tabel satu per baris (salinan teks dari Word/ChatGPT/PDF) -> tabel lagi.
+   * Jumlah kolom ditebak: kolom pertama berisi label (bukan angka), kolom lain campuran nilai.
+   */
+  function recoverFlatTables(res) {
+    const blocks = res.blocks, out = [];
+    const isCell = (b) => b && b.kind === "p" && !b.math && (() => { const t = plain(b.runs).trim(); return t && countWords(t) <= 14 && !RE_CAPTION.test(t) && !RE_NOTE.test(t) && !/[.?!:]$/.test(t.replace(/\b\d+\.\d+$|\bet al\.$|\be\.g\.$/, "")); })();
+    const numeric = (c) => /^[-−–+±<>≤≥~≈]?\s*\(?\d/.test(c) || /^[-−–]$/.test(c);
+    for (let i = 0; i < blocks.length; i++) {
+      out.push(blocks[i]);
+      const cap = blocks[i].kind === "p" ? plain(blocks[i].runs).trim() : "";
+      if (!/^(Table|Tabel)\s+\d+[A-Za-z]?\s*[.:]/i.test(cap)) continue;
+      let j = i + 1; const cells = [];
+      while (j < blocks.length && isCell(blocks[j])) { cells.push(plain(blocks[j].runs).trim()); j++; }
+      if (cells.length < 4) continue;
+      let best = null;
+      for (let k = 2; k <= 8; k++) {
+        if (cells.length % k || cells.length / k < 2) continue;
+        const rows = []; for (let r = 0; r < cells.length; r += k) rows.push(cells.slice(r, r + k));
+        const data = rows.slice(1);
+        const s0 = data.filter((r) => !numeric(r[0])).length / data.length;
+        let pen = 0;
+        for (let c = 1; c < k; c++) if (data.length >= 2 && data.every((r) => !numeric(r[c]) && countWords(r[c]) <= 4) && data.some((r, x) => r[c] !== data[0][c])) pen++;
+        const anyNum = data.some((r) => r.slice(1).some(numeric));
+        const score = s0 - pen / k + (anyNum ? 0.05 : 0) - k * 0.001;
+        if (!best || score > best.score) best = { k, rows, score };
+      }
+      if (!best || best.score < 0.6) continue;
+      out.push({ kind: "table", rows: best.rows, recovered: true });
+      i = j - 1;
+    }
+    return Object.assign({}, res, { blocks: out });
   }
 
   /* ---------------- LaTeX "polos" (mis. salinan ChatGPT yang backslash-nya hilang) ---------------- */
@@ -703,7 +738,7 @@
         let k = i - 1;
         while (k >= floor && i - k <= 30) {
           const tt = (texts[k] || "").trim();
-          if (!tt || !(latexish(tt) || /^[=+\-−]/.test(tt) || /^[+\-=]$/.test(tt))) break;
+          if (!tt || !(latexish(tt) || /^[=+\-−]/.test(tt) || /^[+\-=]$/.test(tt)) || isProse(tt)) break;
           lines.unshift(tt); k--;
         }
         if (lines.length && latexish(lines.join(" "))) groups.push({ start: k + 1, end: i, tex: lines.join("\n") });
@@ -711,6 +746,8 @@
     }
     return groups;
   }
+  /** Kalimat biasa (bukan baris rumus): ada >= 3 kata berurutan di luar perintah LaTeX. */
+  const isProse = (t) => /\p{L}{3,}\s+\p{L}{2,}\s+\p{L}{3,}/u.test(String(t).replace(/\\[a-zA-Z]+(\{[^{}]*\})*/g, " ").replace(/[_^]\{[^{}]*\}/g, " "));
   const isLostLatex = (all, foundDisplay) => !!foundDisplay || (String(all).match(/\(\\[a-zA-Z]/g) || []).length >= 2;
   function recoverLatex(res) {
     const T = TM();
@@ -776,7 +813,7 @@
   }
   const RE_NOTE = /^(Notes?|Catatan|Sumber|Source|Keterangan)\s*[.:]/i;
   const RE_CITATION = /\([^()]*\b(1[89]|20)\d{2}[a-z]?\b[^()]*\)|\bet al\./i;
-  const RE_NUMBERED = /^((?:\d+\.)*\d+)\.?\s+(?=\S)|^([A-H]|[IVX]{1,4})[.)]\s+(?=\p{Lu})/u;
+  const RE_NUMBERED = /^((?:\d+\.)*\d+)[.)]?\s+(?=[\p{L}“"'(])|^([A-H]|[IVX]{1,4})[.)]\s+(?=\p{Lu})/u;
 
   const normHead = (s) => String(s || "").replace(WS, " ").trim()
     .replace(/^(?:(?:\d+\.)*\d+|[IVX]{1,5}|[A-H])[.)]?\s+/, "")
@@ -852,6 +889,7 @@
     if (m) return m[1].split(".").length;
     if (/^[A-H][.)]\s+/.test(t)) return 2;
     if (/^[IVX]{1,4}[.)]\s+/.test(t)) return 1;
+    if (/^\d+\)\s+/.test(t)) return 3; // gaya IEEE: IV. → A. → 1)
     return 0;
   }
 

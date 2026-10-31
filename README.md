@@ -109,6 +109,9 @@ Kebutuhan: Word 2016 ke atas / Microsoft 365 / Word Mac / Word web. Fitur "Hapus
 - **Rapikan** juga memperbaiki rumus seperti itu yang sudah terlanjur ada di dokumen.
 - Huruf khusus ℝ, 𝒟, ℒ (`\mathbb`, `\mathcal`), simbol ⊙ ⊕ ⊗ dan lainnya, `aligned` dengan baris rata di tanda "=", serta `\log`/`\sum` di dalam rumus panjang ditampilkan dengan benar.
 - Kalimat pengantar rumus ("The gating vector is computed as") tidak lagi dianggap sub-heading; "Algorithm 3." dikenali sebagai caption.
+- Tabel yang tersalin sebagai baris-baris teks (satu sel per baris, setelah "Table 4. …") disusun kembali menjadi tabel; jumlah kolom ditebak otomatis.
+- Rumus tanpa pembuka "[" tidak lagi menelan kalimat sebelumnya; `1000,t` (aslinya `1000\,t`) diperbaiki.
+- Heading gaya IEEE (IV. → A. → 1)) mendapat tingkat yang benar.
 
 **v9:**
 - Template jurnal baru.
