@@ -169,8 +169,43 @@
     return p;
   })();
 
+  /* Profil bawaan COMIT — diturunkan dari naskah copyedit Wu et al. (2026), Vol. 1 No. 1 */
+  const COMIT_PROFILE = (function () {
+    const p = clone(DEFAULT_PROFILE);
+    p.name = "COMIT (Computational Media and Immersive Technologies)";
+    p.base = "comit";
+    p.journal = { name: "Computational Media and Immersive Technologies", abbrev: "COMIT" };
+    p.equation = Object.assign({}, p.equation, { textWidthCm: 15.92 }); // A4, margin 2,54 cm
+    const sp = { before: 0, after: 6, line: 1 };
+    Object.assign(p.sectionHeading, { size: 12, bold: true, caps: true, align: "Centered", before: 0, after: 8, line: 1.08 });
+    Object.assign(p.h2, sp); Object.assign(p.h3, sp);
+    Object.assign(p.body, sp);
+    Object.assign(p.caption, sp, { size: 11, figureSize: 11, align: "Centered" });
+    Object.assign(p.note, { size: 10, align: "Justified", before: 0, after: 8, line: 1.08, italic: true, labelItalic: true, labelBold: true }); // "Note." bold-italic, isi italic
+    Object.assign(p.quote, sp);
+    Object.assign(p.table, { size: 10, headerBold: true, apaBorders: true, cellAlign: "Left" });
+    // daftar pustaka gaya IEEE bernomor [1]: nomor dipertahankan, nama jurnal/judul buku italic, "doi: …" apa adanya
+    Object.assign(p.references, { size: 11, align: "Justified", hangingCm: 0.88, before: 0, after: 6, line: 1,
+      citeStyle: "ieee", stripNumbering: false, sort: false, autoItalic: true, linkDoi: false, doiFormat: "keep" });
+    Object.assign(p.abstract, { size: 9, align: "Justified", before: 0, after: 8, line: 1.08, labelSep: "", joinLabeled: "paragraphs" });
+    const back = { size: 11, before: 0, after: 8, line: 1.08 }; // judul bagian penutup 11 pt
+    p.sections = [
+      { key: "abstract", title: "ABSTRACT", aliases: ["Abstract", "Abstrak"], kind: "abstract" },
+      { key: "intro", title: "INTRODUCTION", aliases: ["Introduction", "Pendahuluan"] },
+      { key: "method", title: "METHOD", aliases: ["Methods", "Methodology", "Research Method", "Research Methods", "Materials and Methods", "Metode", "Metode Penelitian"] },
+      { key: "rd", title: "RESULTS AND DISCUSSION", aliases: ["Results and Discussions", "Result and Discussion", "Results & Discussion", "Hasil dan Pembahasan"],
+        majorSubheadings: ["Results", "Result", "Findings", "Discussion", "Discussions", "Hasil", "Pembahasan"] },
+      { key: "concl", title: "CONCLUSIONS", aliases: ["Conclusion", "Conclusions and Recommendations", "Kesimpulan", "Simpulan"] },
+      { key: "ack", title: "ACKNOWLEDGMENT", aliases: ["AKNOWLEDGMENT", "Acknowledgement", "Acknowledgements", "Acknowledgments", "Ucapan Terima Kasih"], heading: { size: 11, before: 12, after: 6, line: 1 } },
+      { key: "contrib", title: "AUTHOR CONTRIBUTION STATEMENT", aliases: ["Author Contributions", "Author Contribution", "Kontribusi Penulis"], heading: back },
+      { key: "ai", title: "AI DISCLOSURE STATEMENT", aliases: ["AI Disclosure", "Declaration of AI Use"], heading: back },
+      { key: "refs", title: "REFERENCES", aliases: ["Reference", "Bibliography", "Daftar Pustaka", "Referensi"], kind: "references", heading: back },
+    ];
+    return p;
+  })();
+
   /** Template bawaan (urutan = urutan di menu). */
-  const PRESETS = [DEFAULT_PROFILE, JEPSD_PROFILE, VOICE_PROFILE, IJOBER_PROFILE];
+  const PRESETS = [DEFAULT_PROFILE, JEPSD_PROFILE, VOICE_PROFILE, IJOBER_PROFILE, COMIT_PROFILE];
   const presetFor = (base) => PRESETS.find((x) => x.base === base) || DEFAULT_PROFILE;
 
   /** Gabungkan profil tersimpan dengan default (agar kunci baru tetap ada). */
@@ -754,7 +789,12 @@
           const next = blocks[idx + 1];
           const nextText = next && next.kind === "p" ? plain(next.runs) : "";
           // dua baris pendek berturut-turut tanpa sinyal kuat -> kemungkinan daftar, bukan heading
-          const nextAlsoShort = nextText && countWords(nextText) <= 4 && !/^h[1-6]$/.test(next.tag || "");
+          // dua baris pendek berturut-turut = daftar, KECUALI keduanya diikuti paragraf panjang
+          // (heading + sub-heading, mis. "Theoretical Background" lalu "Social media usage motivation")
+          const next2 = blocks[idx + 2];
+          const next2Text = next2 && next2.kind === "p" ? plain(next2.runs) : "";
+          const headThenSub = nextText && countWords(next2Text) > (det.maxHeadingWords || 15) && !/[.:;,]$/.test(nextText.trim()) && !/[.:;,]$/.test(text.trim());
+          const nextAlsoShort = nextText && countWords(nextText) <= 4 && !/^h[1-6]$/.test(next.tag || "") && !headThenSub;
           if (strong || !nextAlsoShort || countWords(nextText) === 0 || (next && next.kind === "table")) {
             items.push({ type: "heading", level: 0, runs, tag: bl.tag, depth: numberingDepth(text.trim()), major: majors.has(normHead(text)) });
             continue;
@@ -823,7 +863,7 @@
       const prevLine = k > 0 ? plain(lines[k - 1].runs).trim() : "";
       const prevEndsRef = /https?:\/\/\S+$|doi\.org\/\S+$/i.test(prevLine) ||
         (/[.)]$/.test(prevLine) && !/(?:^|[\s,(])\p{Lu}\.$/u.test(prevLine)); // "…, D." = inisial penulis, belum selesai
-      const continuation = prev && (!starts[k] || (startsLower(t) && !RE_PARTICLE.test(t)) || !prevEndsRef || /[,&]$|\band$/.test(prevLine));
+      const continuation = prev && !/^\[\d+\]\s/.test(t) && (!starts[k] || (startsLower(t) && !RE_PARTICLE.test(t)) || !prevEndsRef || /[,&]$|\band$/.test(prevLine));
       if (continuation) {
         const glue = /-$/.test(prevT) && /^\p{Ll}/u.test(t) ? "" : " ";
         if (!glue) prev.runs[prev.runs.length - 1].text = prev.runs[prev.runs.length - 1].text.replace(/-$/, "");
@@ -867,6 +907,31 @@
     return runs;
   }
 
+  /**
+   * IEEE: miringkan nama jurnal / judul buku-prosiding bila tempelan tidak membawa italic.
+   *   … "Judul artikel," Nama Jurnal, vol. 7, …      -> Nama Jurnal italic
+   *   … "Judul bab," in Judul Buku, Ed., Penerbit, …  -> Judul Buku italic
+   */
+  function ieeeAutoItalic(runs) {
+    if (runs.some((r) => r.i)) return runs;
+    const t = plain(runs);
+    const q = /[,.]["”]\s+/.exec(t);
+    if (!q) return runs;
+    let a = q.index + q[0].length;
+    const rest = t.slice(a);
+    let end;
+    if (/^in\s/i.test(rest)) {
+      a += 3;
+      const c = /,\s/.exec(t.slice(a));
+      end = c ? a + c.index : -1;
+    } else {
+      const c = /,\s*(?:vol\.|no\.|pp\.|Art\.\s*no\.|art\.|\d{4}\b|\d+\s*,|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s)/.exec(rest);
+      end = c ? a + c.index : -1;
+    }
+    if (end <= a || end - a > 200) return runs;
+    return patchRange(runs, a, end, { i: true });
+  }
+
   function linkUrls(runs) {
     const t = plain(runs);
     const re = /\bhttps?:\/\/[^\s<>"]+[^\s<>".,;)\]]|\bdoi:\s*(10\.\d{4,9}\/\S+[^\s.,;)])/gi;
@@ -892,8 +957,8 @@
         if (m) runs = dropPrefix(runs, m[0].length);
       }
       // normalisasi doi: -> https://doi.org/
-      runs = mapRunsText(runs, (s) => s.replace(/\bdoi:\s*(10\.)/gi, "https://doi.org/$1"));
-      if (rc.autoItalic) runs = apaAutoItalic(runs);
+      if (rc.doiFormat !== "keep") runs = mapRunsText(runs, (s) => s.replace(/\bdoi:\s*(10\.)/gi, "https://doi.org/$1"));
+      if (rc.autoItalic) runs = rc.citeStyle === "ieee" ? ieeeAutoItalic(runs) : apaAutoItalic(runs);
       if (rc.linkDoi) runs = linkUrls(runs);
       items.push({ type: "ref", runs: normalizeRuns(runs) });
     }
@@ -916,7 +981,7 @@
     const P = profile;
     let c, first = 0, left = 0;
     switch (it.type) {
-      case "section": c = P.sectionHeading; break;
+      case "section": c = it.sec && it.sec.heading ? Object.assign({}, P.sectionHeading, it.sec.heading) : P.sectionHeading; break;
       case "heading": c = it.level === 3 ? P.h3 : P.h2; break;
       case "caption": {
         c = P.caption;
@@ -985,7 +1050,9 @@
     }
     if (it.type === "note") {
       const m = RE_NOTE.exec(plain(runs));
+      if (profile.note.italic) runs.forEach((r) => (r.i = true)); // seluruh catatan miring
       if (m && profile.note.labelItalic) runs = patchRange(runs, 0, m[0].length, { i: true });
+      if (m && profile.note.labelBold) runs = patchRange(runs, 0, m[0].replace(/\s+$/, "").length, { b: true });
     }
     if ((it.type === "quote" || it.type === "quoteAttr") && profile.quote) {
       if (profile.quote.italic) runs.forEach((r) => (r.i = true));
@@ -1400,7 +1467,7 @@
     classifyAbstract, abstractParagraphs, pickAbstractTarget, abstractTargetsInCell, isAbstractNoise, RE_ABSTRACT_HEAD,
     DEFAULT_PROFILE, PRESETS, presetFor, mergeProfile, clone,
     parseInput, parseHtml, parseText, classify, classifyReferences, classifyExisting,
-    paraFormat, finalRuns, prepareItems, prepareEquation, equationOptions, runsFromOoxml, ooxmlKinds, cleanAttribution, looksLikeEquation, looksLikeAttribution, countWords, plain, normalizeRuns, titleCase, apaAutoItalic, linkUrls,
+    ieeeAutoItalic, paraFormat, finalRuns, prepareItems, prepareEquation, equationOptions, runsFromOoxml, ooxmlKinds, cleanAttribution, looksLikeEquation, looksLikeAttribution, countWords, plain, normalizeRuns, titleCase, apaAutoItalic, linkUrls,
     findSectionHeadings, sectionRange, pickAnchor, planNewSection, countDocument, normHead,
     CM,
   };

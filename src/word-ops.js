@@ -321,7 +321,7 @@
               heading = blank.insertParagraph("", "After");
             }
           }
-          formatNewParagraph(heading, { type: "section", runs: [{ text: sec.title }] }, profile);
+          formatNewParagraph(heading, { type: "section", runs: [{ text: sec.title }], sec }, profile);
           preFirst = preFirst || heading;
           start = heading; loc = "After"; created = true;
         }
@@ -359,7 +359,7 @@
 
       // judul bagian
       const hp = paras[range.start];
-      applyExisting(hp, { type: "section" }, profile, infos[range.start].bold);
+      applyExisting(hp, { type: "section", sec }, profile, infos[range.start].bold);
       if (profile.sectionHeading.caps) {
         const t = infos[range.start].text.trim();
         if (t !== t.toUpperCase()) hp.insertText(t.toUpperCase(), "Replace");
@@ -389,6 +389,14 @@
         if (t.replace(/[^\p{L}]/gu, "").length < 2) return;
         applyExisting(paras[j], it, profile, infos[j].bold, infos[j].italic);
         if (it.type === "quote") { fixExistingQuote(paras[j], infos[j].text || "", Q); lastQuote = j; quotesFixed++; } else lastQuote = -1;
+        if (it.type === "note" && profile.note && (profile.note.labelBold || profile.note.labelItalic)) {
+          const m = /^(Notes?|Catatan|Sumber|Source|Keterangan)\s*[.:]/i.exec(t);
+          if (m) {
+            const hit = paras[j].search(m[0], { matchCase: true }).getFirstOrNullObject();
+            if (profile.note.labelBold) hit.font.bold = true;
+            if (profile.note.labelItalic) hit.font.italic = true;
+          }
+        }
         if (it.type === "caption") {
           const m = /^(Table|Tables|Figure|Fig\.|Tabel|Gambar|Grafik|Chart|Diagram)\s+(\d+[A-Za-z]?|[IVX]+)\s*[.:]?/i.exec(t);
           if (m && profile.caption.labelBold) {
@@ -516,6 +524,9 @@
       if (f.italic) p.font.italic = true;
       else if (curItalic === true) p.font.italic = false; // APA: kutipan tidak italic
       if (curBold === true) p.font.bold = false;
+    } else if (it.type === "note") {
+      if (curBold === true) p.font.bold = false;
+      if (profile.note && profile.note.italic) p.font.italic = true;
     } else if (it.type === "caption") {
       // caption: judul tidak bold/italic (label "Table 1." dibold terpisah)
       if (curBold === true) p.font.bold = false;

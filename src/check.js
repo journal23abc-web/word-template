@@ -217,6 +217,7 @@
   /* ---------------- pemeriksaan utama ---------------- */
   function run(meta, profile, opts) {
     opts = opts || {};
+    meta = Object.assign({}, meta, { startPage: meta.startPage != null && meta.startPage !== "" ? parseInt(meta.startPage, 10) || null : null });
     const P = profile;
     const C = Object.assign({ maxMonths: 3, minDays: 0, requireRevised: true }, P.check || {});
     const today = opts.today ? new Date(opts.today) : new Date();

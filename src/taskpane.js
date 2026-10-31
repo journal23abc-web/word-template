@@ -558,7 +558,7 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     { title: "Sub-heading tingkat 3", prefix: "h3", fields: paraFields({ bold: true }) },
     { title: "Paragraf isi", prefix: "body", fields: paraFields({ indent: true }) },
     { title: "Caption tabel & gambar", prefix: "caption", fields: [["labelBold", "Label \"Table 1.\" tebal", "bool"], ...paraFields({})] },
-    { title: "Catatan tabel (Note.)", prefix: "note", fields: [["labelItalic", "Label \"Note.\" miring", "bool"], ...paraFields({})] },
+    { title: "Catatan tabel (Note.)", prefix: "note", fields: [["labelItalic", "Label \"Note.\" miring", "bool"], ["labelBold", "Label \"Note.\" tebal", "bool"], ["italic", "Seluruh catatan miring", "bool"], ...paraFields({})] },
     { title: "Abstrak", prefix: "abstract", fields: [
       ["size", "Ukuran font (pt)", "number", { step: 0.5, min: 6 }],
       ["italic", "Miring (italic)", "bool"],
@@ -597,9 +597,11 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     ] },
     { title: "Referensi", prefix: "references", fields: [
       ...paraFields({ hanging: true }),
-      ["autoItalic", "Italic otomatis APA (nama jurnal, volume / judul buku) bila tempelan tanpa italic", "bool"],
+      ["citeStyle", "Gaya referensi", "select", { options: [["apa", "APA (Nama, A. (2020). …)"], ["ieee", "IEEE bernomor ([1] A. Nama, \"Judul,\" …)"]] }],
+      ["autoItalic", "Italic otomatis (APA: nama jurnal + volume / judul buku; IEEE: nama jurnal / judul buku) bila tempelan tanpa italic", "bool"],
       ["linkDoi", "Jadikan DOI/URL hyperlink", "bool"],
-      ["stripNumbering", "Hapus penomoran [1] / 1.", "bool"],
+      ["doiFormat", "Penulisan DOI", "select", { options: [["url", "https://doi.org/10.… (APA)"], ["keep", "Biarkan seperti tempelan (doi: 10.…)"]] }],
+      ["stripNumbering", "Hapus penomoran [1] / 1. (matikan untuk IEEE)", "bool"],
       ["sort", "Urutkan A–Z (yang ditempel)", "bool"],
     ] },
     { title: "Deteksi otomatis", prefix: "detect", fields: [
@@ -684,6 +686,7 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
         <span class="lab">Judul di dokumen</span><input type="text" data-f="title" value="${esc(s.title)}">
         <span class="lab">Nama lain (pisahkan koma)</span><input type="text" data-f="aliases" value="${esc((s.aliases || []).join(", "))}">
         <span class="lab">Sub-heading tingkat 2 khusus (mis. Results, Discussion)</span><input type="text" data-f="majors" value="${esc((s.majorSubheadings || []).join(", "))}">
+        <span class="lab">Ukuran judul bagian ini (pt) — kosong = ikut pengaturan umum</span><input type="number" step="0.5" min="6" data-f="hsize" value="${s.heading && s.heading.size ? s.heading.size : ""}">
         <div class="tools">${s.kind === "abstract" ? '<span class="lab">Abstrak (mengganti isi kotak abstrak)</span>' : `<label><input type="checkbox" data-f="refs" ${s.kind === "references" ? "checked" : ""}> Bagian referensi</label>`}
           <span><button type="button" class="icon-btn" data-a="up" title="Naik">↑</button> <button type="button" class="icon-btn" data-a="down" title="Turun">↓</button> <button type="button" class="icon-btn" data-a="del" title="Hapus">✕</button></span></div>`;
       el.querySelectorAll("input").forEach((inp) => inp.addEventListener("change", () => {
@@ -691,6 +694,7 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
         if (f === "title") s.title = inp.value.trim() || s.title;
         if (f === "aliases") s.aliases = inp.value.split(",").map((x) => x.trim()).filter(Boolean);
         if (f === "majors") s.majorSubheadings = inp.value.split(",").map((x) => x.trim()).filter(Boolean);
+        if (f === "hsize") { const v = parseFloat(inp.value); if (v > 0) s.heading = Object.assign({}, s.heading, { size: v }); else if (s.heading) delete s.heading.size; }
         if (f === "refs") { if (inp.checked) s.kind = "references"; else delete s.kind; }
         saveStore(); renderSections();
       }));

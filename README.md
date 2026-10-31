@@ -4,36 +4,22 @@ Tempel isi artikel per bagian (Introduction, Method, Results and Discussion, Con
 
 - **Font, ukuran, perataan, spasi sebelum/sesudah, spasi baris** untuk tiap jenis paragraf
 - **Deteksi sub-heading otomatis** (kalimat pendek tanpa titik, teks bold, heading dari Google Docs/ChatGPT, heading bernomor seperti `2.1`) → dibuat bold sesuai template. Di Results and Discussion, *Results* dan *Discussion* jadi tingkat 2, sub-judul di bawahnya tingkat 3
-- **Referensi**: hanging indent 1,27 cm, italic otomatis gaya APA (nama jurnal + volume, atau judul buku) bila tempelan tidak membawa italic, DOI jadi hyperlink, baris terputus dari PDF disambung
+- **Referensi**: hanging indent sesuai template, gaya **APA** atau **IEEE bernomor** ([1] …). Italic otomatis (APA: nama jurnal + volume / judul buku; IEEE: nama jurnal / judul buku) bila tempelan tidak membawa italic, DOI jadi hyperlink (APA) atau dibiarkan "doi: …" (IEEE), baris terputus dari PDF disambung
 - **Caption** (`Table 1.` / `Figure 1.` → label bold, judul normal; caption gaya APA dua baris "Figure 1" + judul italic otomatis digabung, dan italic pada judul caption dihilangkan), **Note.**, dan **tabel** yang ditempel (garis gaya APA, font 10 pt)
 - **Menambah, bukan mengganti**: isi masuk di bawah konten yang sudah ada pada bagian itu. Bila judul bagian belum ada, judulnya dibuat di urutan yang benar
-- **Abstrak**: kartu ABSTRACT mengganti teks di kotak abstrak (bukan menambah). AIEDS memakai format terstruktur: *Purpose – / Methodology – / Findings – / Research limitations – / Originality –*. Label dikenali otomatis dari tempelan (juga *Design/methodology/approach:*, *Tujuan:*, dll.), dibuat **bold**, pemisahnya diseragamkan menjadi " – ", dan komponennya disatukan dalam satu paragraf yang dipisah *line break*, 10 pt rata kiri. JEPSI memakai satu paragraf 9 pt justify. Baris *Keywords* di tempelan dilewati. Abstrak lama bisa dikembalikan, dan jumlah kata dibandingkan dengan batas abstrak jurnal
+- **Abstrak**: kartu ABSTRACT mengganti teks di kotak abstrak (bukan menambah). Abstrak terstruktur (*Purpose – / Methodology – / Findings – …*) dikenali otomatis dari tempelan (juga *Design/methodology/approach:*, *Tujuan:*, dll.); labelnya dibuat **bold** dan pemisahnya diseragamkan sesuai template. Abstrak satu paragraf diformat sesuai ukuran dan perataan template. Baris *Keywords* di tempelan dilewati. Abstrak lama bisa dikembalikan, dan jumlah kata dibandingkan dengan batas abstrak jurnal
 - **Cek kesesuaian** (tab **Cek**): mencocokkan *To cite this article*, baik di badan dokumen, tabel, maupun footer, dengan artikelnya. Yang dicek: penulis (nama, urutan, inisial), judul, nama jurnal, volume/nomor, tahun, halaman (dibandingkan dengan nomor halaman awal dokumen), DOI (format, kelengkapan, kecocokan vX iY dan DOI di header), serta tanda baca (titik ganda, spasi ganda, placeholder). Juga memeriksa **article history**: tanggal terbaca dan valid, urutan Received ≤ Revised ≤ Accepted, dan jarak Received → Accepted **maks. 3 bulan** (bisa diubah per jurnal), tidak melewati bulan terbit, serta tanggal di masa depan. Selain itu memeriksa header/footer (placeholder "Author", "Title…", "XXXX"; running head penulis dan judul; nama jurnal) dan batas kata
 - **Hapus isi bagian**: kosongkan seluruh isi satu bagian di dokumen (atau semua bagian sekaligus) dengan judul bagian tetap ada, misalnya untuk mengganti Introduction dengan versi baru. Ada konfirmasi dan tombol **Kembalikan isi yang dihapus** (selama panel masih terbuka), dan Ctrl+Z tetap bisa dipakai
-- **Rapikan isi yang ada**: terapkan format template ke paragraf yang sudah terlanjur ditempel manual (italic tidak diubah), **termasuk tabel** di bagian itu: garis vertikal dihapus, garis gaya APA (atas, bawah judul kolom, bawah tabel), font & ukuran tabel, judul kolom bold, perataan sel
+- **Rapikan isi yang ada**: terapkan format template ke paragraf yang sudah terlanjur ditempel manual (italic tidak diubah), **termasuk tabel** di bagian itu: garis vertikal dihapus, garis gaya APA (atas, bawah judul kolom, bawah tabel), font & ukuran tabel, judul kolom bold, perataan sel. Baris rumus yang masih berupa teks juga diubah menjadi persamaan Word
 - **Kutipan langsung** (mis. kutipan wawancara “…” Guru, S1) dikenali dan diformat sesuai APA 7 (lihat di bawah)
 - **Rumus / persamaan** (tab **Rumus**): membuat, menyalin, dan menempel rumus sebagai **persamaan Word asli** (bisa diedit dengan Equation Editor), lengkap dengan nomor (1), (2) rata kanan. Lihat bagian *Rumus* di bawah
 - **Hitung kata** per bagian dan total terhadap batas jurnal (aturan bisa diatur per jurnal), plus abstrak
 - **Profil template**: semua angka bisa diubah, dan profil bisa diduplikat untuk jurnal lain (ekspor/impor JSON)
 
-**Template bawaan** (pilih di menu **Jurnal** di bagian atas tab Tempel):
-
-| | AIEDS | JEPSI | VOICE | IJOBER |
-|---|---|---|---|---|
-| Font | Cambria | Cambria | Cambria | Cambria |
-| Judul bagian | 12 pt bold KAPITAL, tengah, sesudah 6 pt | 11 pt bold KAPITAL, tengah, sesudah 6 pt | 12 pt bold KAPITAL, tengah, 6/6 pt | bernomor (1. INTRODUCTION), Heading 1, 11 pt bold, kiri, 24/6 pt |
-| Sub-heading | 11 pt bold, 3/3 pt | 11 pt bold, 0/6 pt | 11 pt bold, 6/6 pt | bernomor (2.1 …) dipertahankan, 11 pt bold, 3/3 pt |
-| Isi | 11 pt justify, 3/3 pt, spasi tunggal | 11 pt justify, 0/6 pt, spasi tunggal | 11 pt justify, 6/6 pt | 11 pt justify, 3/3 pt |
-| Caption / Note. | label bold / Note. tegak | label bold / *Note.* italic | label bold; tabel 10 pt, gambar 11 pt | label bold, 10 pt (gaya Normal — gaya Caption template ini italic) |
-| Abstrak | terstruktur, label bold " – ", 10 pt rata kiri, 1 paragraf dengan line break | 1 paragraf, 9 pt justify, sesudah 8 pt, spasi 1,08 | terstruktur, paragraf terpisah, hanya label bold, 10 pt justify | 1 paragraf, 10 pt justify (bukan di tabel) |
-| Kutipan langsung | APA 7 | APA 7 | APA 7 | APA 7 |
-| Tabel | 10 pt, garis APA, isi rata tengah | 10 pt, garis APA, isi rata kiri | 10 pt, garis APA, isi rata kiri | 10 pt, garis APA, isi rata kiri |
-| Referensi | 11 pt, hanging 1,27 cm, sesudah 6 pt | 11 pt, hanging 1,27 cm, sesudah 6 pt | 11 pt, hanging 0,83 cm, sesudah 4 pt, tanpa italic | 11 pt, hanging 0,85 cm, sesudah 3 pt, tanpa italic |
-
 **Kutipan langsung / wawancara mengikuti APA 7** (Publication Manual 8.27 & 8.36), bawaan untuk semua jurnal dan bisa diubah per jurnal di Template → Kutipan:
 - **≥ 40 kata** → blok menjorok **1,27 cm**, **tanpa tanda kutip**, **tidak italic**; identitas partisipan **dalam kurung setelah tanda baca akhir**, misalnya *… improve things going forward. (Internal Audit Practitioner, subsidiary company, translated from Bahasa Indonesia)*.
 - **< 40 kata** → APA menulisnya di dalam kalimat dengan tanda kutip. Add-in tetap menampilkannya sebagai paragraf terpisah, tetapi **tanda kutipnya dipertahankan**: “…” (Peran, kode).
-- Atribusi yang ditulis di **baris terpisah** (gaya IJOBER) atau **menempel setelah tanda kutip** (gaya JEPSI: “…” Teacher, S1) otomatis dipindahkan ke dalam kurung di akhir kutipan. **Rapikan** juga membetulkan kutipan yang sudah ada di dokumen.
+- Atribusi yang ditulis di **baris terpisah** atau **menempel setelah tanda kutip** (“…” Teacher, S1) otomatis dipindahkan ke dalam kurung di akhir kutipan. **Rapikan** juga membetulkan kutipan yang sudah ada di dokumen.
 
 **Rumus / persamaan** (tab **Rumus** di menu kanan):
 - **Ketik atau tempel** rumus dalam bentuk apa pun: LaTeX (`\frac{a}{b}`, `\beta_0`), teks biasa (`Y = β0 + β1X1 + ε`, `n = N/(1+Ne²)`), atau **salin langsung** dari Word, ChatGPT, Wikipedia, dan situs lain yang memakai KaTeX/MathJax/MathML. Pratinjau muncul langsung.
@@ -43,7 +29,7 @@ Tempel isi artikel per bagian (Introduction, Method, Results and Discussion, Con
 - **Pustaka rumus penelitian**: rata-rata, simpangan baku, Z-score, Slovin, Lemeshow, Cronbach's alpha, korelasi Pearson, AVE, CR, uji t, chi-square, Cohen's d, N-Gain, regresi linear berganda, MRA, R², regresi logistik, Fuzzy C-Means, dan jarak Euclidean.
 - **Saat menempel isi bagian** (tab Tempel), rumus ikut terbawa sebagai persamaan Word: rumus dari Word (termasuk yang diletakkan di tabel `| rumus | (1) |`), ChatGPT (`\[ … \]`, `$$ … $$`), dan web. Baris rumus berupa teks, seperti `Y = β0 + β1X1 + ε (1)`, juga diubah. Rumus di dalam kalimat menjadi teks biasa dengan subskrip dan superskrip Unicode (R², β₀).
 - **Rapikan isi yang ada** juga membetulkan rumus di bagian itu: baris rumus yang masih berupa teks biasa (mis. `Y = β0 + β1X1 + ε (1)`, termasuk subskrip/superskrip dari naskah) diubah menjadi persamaan Word bernomor sesuai template, dan nomor "(1)" yang terpisah di baris berikutnya digabung. Rumus Word yang sudah benar tidak diubah. Rumus berupa **objek MathType/Equation 3.0** atau gambar tidak bisa diubah otomatis; jumlahnya dilaporkan.
-- **Penomoran per jurnal** (Template → Rumus / persamaan): *(1) rata kanan* (bawaan; lebar halaman dibaca dari dokumen), *(1) langsung setelah rumus* (bawaan VOICE, sesuai contoh di templatenya), *penomoran Word 365 (#)*, atau tanpa nomor.
+- **Penomoran per jurnal** (Template → Rumus / persamaan): *(1) rata kanan* (bawaan; lebar halaman dibaca dari dokumen), *(1) langsung setelah rumus*, *penomoran Word 365 (#)*, atau tanpa nomor.
 
 **Batas kata diatur sendiri per jurnal** di tab **Hitung kata → Aturan hitung kata**: maksimal/minimal kata isi, maksimal kata abstrak, bagian mana yang ikut dihitung (mis. referensi, Author Contribution, AI Disclosure), dan teks tabel. 0 = tidak dibatasi.
 
@@ -118,6 +104,14 @@ Kebutuhan: Word 2016 ke atas / Microsoft 365 / Word Mac / Word web. Fitur "Hapus
 
 ## 6. Catatan versi
 
+**v9:**
+- Template jurnal baru.
+- Daftar pustaka gaya **IEEE** bernomor ([1] …): nomor dipertahankan, nama jurnal / judul buku dimiringkan otomatis bila tempelan tanpa italic, "doi: 10.…" tidak diubah, dan referensi yang terputus (salinan PDF) disambung dengan benar. Atur di Template → Referensi → *Gaya referensi*.
+- Ukuran judul bisa diatur per bagian (mis. judul bagian penutup 11 pt sementara judul utama 12 pt) — Template → Daftar bagian artikel.
+- Catatan tabel: pilihan label "Note." tebal dan seluruh catatan miring.
+- Deteksi sub-heading dari teks polos: heading yang langsung diikuti sub-heading (mis. "Theoretical Background" lalu "Social media usage motivation") kini dikenali keduanya.
+- Cek: perbandingan halaman awal cite dengan penomoran dokumen diperbaiki.
+
 **v8.1:**
 - **Rapikan** sekarang mengubah rumus yang masih berupa teks menjadi persamaan Word (lihat bagian *Rumus*).
 
@@ -128,20 +122,19 @@ Kebutuhan: Word 2016 ke atas / Microsoft 365 / Word Mac / Word web. Fitur "Hapus
 - Setelah memperbarui file di GitHub, panel otomatis memuat versi baru (tidak perlu hapus cache).
 
 **v7:**
-- Template baru **IJOBER**.
 - Kutipan wawancara mengikuti **APA 7** untuk semua jurnal (lihat di atas).
 - Baris persamaan (Y = β0 + …) dikenali dan tidak dianggap sub-heading.
 - Sub-heading "Theme 1: …" yang panjang dikenali.
 - Cek: article history dalam satu baris "(Received: …; Revised: …; Accepted: …)", rentang halaman di header ("Page 57-71") dibandingkan dengan penomoran dokumen, dan *cite* tidak wajib untuk jurnal yang tidak memakainya.
 
 **v6.1:**
-- Perbaikan error *GeneralException (TableCell.cellIndex)* saat mengganti/mengosongkan abstrak di tabel yang punya sel gabungan (template JEPSI). Add-in tidak lagi memakai nomor baris/kolom sel; sel abstrak dikenali dari isinya.
+- Perbaikan error *GeneralException (TableCell.cellIndex)* saat mengganti/mengosongkan abstrak di tabel yang punya sel gabungan. Add-in tidak lagi memakai nomor baris/kolom sel; sel abstrak dikenali dari isinya.
 - Rapikan tabel juga tidak lagi memakai nomor sel, jadi aman untuk tabel bersel gabungan.
 
 **v6 (perbaikan bug):**
-- Abstrak yang disalin dari dalam tabel (seperti di template JEPSI/AIEDS/VOICE) sekarang terbaca. Kalau seluruh tabel halaman depan ikut tersalin, *Article info*, *Keywords* beserta butirnya, *Article history*, *cite*, dan lisensi otomatis dilewati.
-- Mengganti abstrak yang terdiri dari beberapa paragraf (VOICE) memakai ulang paragraf yang ada, sehingga tidak error di sel tabel dan latar warnanya terjaga.
-- Hitung kata abstrak tidak lagi ikut menghitung teks *To cite this article* (JEPSI).
+- Abstrak yang disalin dari dalam tabel sekarang terbaca. Kalau seluruh tabel halaman depan ikut tersalin, *Article info*, *Keywords* beserta butirnya, *Article history*, *cite*, dan lisensi otomatis dilewati.
+- Mengganti abstrak yang terdiri dari beberapa paragraf memakai ulang paragraf yang ada, sehingga tidak error di sel tabel dan latar warnanya terjaga.
+- Hitung kata abstrak tidak lagi ikut menghitung teks *To cite this article*.
 - Panel tetap aktif walaupun Word lambat siap saat pertama dibuka.
 - Kompatibel dengan Word for Mac versi lama (tanpa regex *lookbehind*).
 - Rapikan: label caption ("Table 1.") dibold, baris persamaan "(1)" tidak diubah.
