@@ -436,7 +436,7 @@
         j = next;
       }
       return { formatted: n, headings: items.filter((i) => i && i.type === "heading").length, quotes: quotesFixed, tables: tablesDone, tableErrors,
-        equations: eqRes.converted, equationsOk: eqRes.alreadyOk, mathType: eqRes.mathType, equationErrors: eqRes.errors };
+        equations: eqRes.converted, inlineMath: eqRes.inline, equationsOk: eqRes.alreadyOk, mathType: eqRes.mathType, equationErrors: eqRes.errors };
     });
   }
 
@@ -446,12 +446,60 @@
    * Rumus Word yang sudah benar tidak disentuh; objek MathType/gambar hanya dihitung (tidak bisa diubah).
    */
   async function fixEquations(context, paras, infos, idx, items, profile) {
-    const res = { converted: 0, alreadyOk: 0, mathType: 0, errors: 0 };
+    const res = { converted: 0, alreadyOk: 0, mathType: 0, errors: 0, inline: 0 };
     if (!M() || (profile.equation && profile.equation.autoConvert === false)) return res;
+    let width = null;
+    // (a) LaTeX polos yang terpecah per baris: "[" … "]" (salinan ChatGPT tanpa backslash) -> satu persamaan
+    const texts = idx.map((j) => infos[j].text || "");
+    const groups = E.findDisplayLatex(texts).filter((g) => idx[g.end] - idx[g.start] === g.end - g.start); // harus berurutan di dokumen
+    const used = new Set();
+    for (let g = groups.length - 1; g >= 0; g--) {
+      const gr = groups[g];
+      const r = M().parse(gr.tex);
+      if (r.error || !r.ast) continue;
+      try {
+        if (width == null) width = (await readTextWidthCm(context)) || 0;
+        const pkg = M().buildEquationPackage({ ast: r.ast }, E.equationOptions(profile, { number: r.number, textWidthCm: width || undefined }));
+        for (let k = gr.end; k > gr.start; k--) paras[idx[k]].delete();
+        await context.sync();
+        await placeEquation(context, paras[idx[gr.start]], pkg);
+        for (let k = gr.start; k <= gr.end; k++) used.add(idx[k]);
+        res.converted++;
+      } catch (e) { res.errors++; console.warn("rumus gagal diubah", e); }
+    }
+    // (b) rumus di dalam kalimat: (x_i), (\mathbf W\in\mathbb R^{d}) -> huruf miring + subskrip/superskrip
+    const lost = E.isLostLatex(texts.join("\n"), groups.length);
+    for (let k = 0; k < idx.length; k++) {
+      const j = idx[k];
+      if (used.has(j) || !items[k] || !["body", "note", "caption", "quote"].includes(items[k].type)) continue;
+      const t = infos[j].text || "";
+      const spans = E.inlineMathSpans(t, lost);
+      for (let q = spans.length - 1; q >= 0; q--) {
+        const [a, e, tex] = spans[q];
+        const r = M().parse(tex);
+        const src = t.slice(a, e);
+        if (r.error || !r.ast || src.length > 250) continue;
+        const runs = M().toRuns(r.ast);
+        if (!runs.length) continue;
+        const hit = paras[j].search(src.replace(/\^/g, "^^"), { matchCase: true }).getFirstOrNullObject();
+        hit.load("isNullObject");
+        await context.sync();
+        if (hit.isNullObject) continue;
+        let prev = null;
+        runs.forEach((x, n) => {
+          const rg = n === 0 ? hit.insertText(x.text, "Replace") : prev.insertText(x.text, "After");
+          rg.font.set({ italic: !!x.i, bold: !!x.b, subscript: !!x.sub, superscript: !!x.sup });
+          prev = rg;
+        });
+        res.inline++;
+      }
+      if (spans.length) await context.sync();
+    }
     const RE_NUM = /^\s*\(\s*(\d+[a-z]?)\s*\)\s*$/;
     // kandidat: paragraf rumus + paragraf kosong / "(n)" (bisa berisi objek MathType)
     const cand = [];
     idx.forEach((j, k) => {
+      if (used.has(j)) return;
       const t = (infos[j].text || "").trim();
       if ((items[k] && items[k].type === "equation") || !t || RE_NUM.test(t)) cand.push({ j, k, t });
     });
@@ -460,12 +508,11 @@
     await context.sync();
     cand.forEach((c, i) => { c.xml = ox[i].value; c.kinds = E.ooxmlKinds(c.xml); });
     const byJ = new Map(cand.map((c) => [c.j, c]));
-    res.mathType = cand.filter((c) => c.kinds.mathType || (c.kinds.ole && !c.t.replace(RE_NUM, ""))).length;
-    let width = null;
+    res.mathType = cand.filter((c) => !used.has(c.j)).filter((c) => c.kinds.mathType || (c.kinds.ole && !c.t.replace(RE_NUM, ""))).length;
     // dari bawah ke atas
     for (let i = cand.length - 1; i >= 0; i--) {
       const c = cand[i];
-      if (!c.t || RE_NUM.test(c.t)) continue; // kosong / nomor saja
+      if (!c.t || RE_NUM.test(c.t) || used.has(c.j)) continue; // kosong / nomor saja / sudah diubah
       if (c.kinds.omml) { res.alreadyOk++; continue; }
       if (c.kinds.ole || c.kinds.picture) continue;
       const k = c.k;

@@ -25,6 +25,12 @@
     ldots: "…", cdots: "⋯", vdots: "⋮", ddots: "⋱", dots: "…", hbar: "ℏ", ell: "ℓ", Re: "ℜ", Im: "ℑ", aleph: "ℵ",
     langle: "⟨", rangle: "⟩", lvert: "|", rvert: "|", lVert: "‖", rVert: "‖", vert: "|", Vert: "‖", lfloor: "⌊", rfloor: "⌋", lceil: "⌈", rceil: "⌉",
     "{": "{", "}": "}", "%": "%", "$": "$", "&": "&", "#": "#", "_": "_", "|": "‖",
+    odot: "⊙", oplus: "⊕", otimes: "⊗", ominus: "⊖", oslash: "⊘", top: "⊤", bot: "⊥", intercal: "⊺", dagger: "†", ddagger: "‡",
+    triangleq: "≜", coloneqq: "≔", doteq: "≐", lesssim: "≲", gtrsim: "≳", leqslant: "⩽", geqslant: "⩾", nleq: "≰", ngeq: "≱",
+    sqcup: "⊔", sqcap: "⊓", uplus: "⊎", wr: "≀", diamond: "⋄", triangle: "△", square: "□", checkmark: "✓", colon: ":",
+    longrightarrow: "⟶", longleftarrow: "⟵", Longrightarrow: "⟹", implies: "⟹", iff: "⟺", uparrow: "↑", downarrow: "↓", hookrightarrow: "↪",
+    leftarrow: "←", gets: "←", lbrace: "{", rbrace: "}", lbrack: "[", rbrack: "]", backslash: "∖", ast: "∗", S: "§", P: "¶", copyright: "©",
+    varkappa: "ϰ", digamma: "ϝ", imath: "ı", jmath: "ȷ", wp: "℘", mho: "℧", complement: "∁", nexists: "∄", sharp: "♯", flat: "♭", natural: "♮",
   };
   const NARY = { sum: "∑", prod: "∏", coprod: "∐", int: "∫", iint: "∬", iiint: "∭", oint: "∮", bigcup: "⋃", bigcap: "⋂" };
   const FUNCS = new Set(["log", "ln", "exp", "sin", "cos", "tan", "cot", "sec", "csc", "arcsin", "arccos", "arctan", "sinh", "cosh", "tanh",
@@ -33,7 +39,24 @@
   const LIMFUNCS = new Set(["lim", "max", "min", "sup", "inf", "argmax", "argmin"]);
   const ACCENTS = { hat: "\u0302", widehat: "\u0302", bar: "\u0305", overline: "\u0305", tilde: "\u0303", widetilde: "\u0303", dot: "\u0307", ddot: "\u0308", vec: "\u20D7", check: "\u030C", acute: "\u0301", grave: "\u0300", breve: "\u0306" };
   const SPACES = { ",": " ", ";": " ", ":": " ", quad: "  ", qquad: "    ", " ": " ", "!": "", enspace: " ", thinspace: " " };
-  const TEXTCMD = new Set(["text", "textrm", "mathrm", "operatorname", "textit", "mbox", "textup", "begin", "end"]);
+  const TEXTCMD = new Set(["text", "textrm", "mathrm", "operatorname", "textit", "mbox", "textup", "texttt", "textsf", "begin", "end"]);
+  const SCRIPTS = { mathbb: "double-struck", mathcal: "script", mathscr: "script", mathfrak: "fraktur", mathsf: "sans-serif", mathtt: "monospace", Bbb: "double-struck" };
+  // huruf matematika Unicode (untuk teks & pratinjau): ℝ, 𝒟, 𝔉, …
+  const ALNUM_BASE = { bold: [0x1D400, 0x1D41A], "double-struck": [0x1D538, 0x1D552], script: [0x1D49C, 0x1D4B6], fraktur: [0x1D504, 0x1D51E], "sans-serif": [0x1D5A0, 0x1D5BA], monospace: [0x1D670, 0x1D68A] };
+  const ALNUM_EXC = {
+    "double-struck": { C: "ℂ", H: "ℍ", N: "ℕ", P: "ℙ", Q: "ℚ", R: "ℝ", Z: "ℤ" },
+    script: { B: "ℬ", E: "ℰ", F: "ℱ", H: "ℋ", I: "ℐ", L: "ℒ", M: "ℳ", R: "ℛ", e: "ℯ", g: "ℊ", o: "ℴ" },
+    fraktur: { C: "ℭ", H: "ℌ", I: "ℑ", R: "ℜ", Z: "ℨ" },
+  };
+  const styledChar = (ch, scr) => {
+    const ex = ALNUM_EXC[scr] && ALNUM_EXC[scr][ch];
+    if (ex) return ex;
+    const b = ALNUM_BASE[scr];
+    if (!b) return ch;
+    if (/[A-Z]/.test(ch)) return String.fromCodePoint(b[0] + ch.charCodeAt(0) - 65);
+    if (/[a-z]/.test(ch)) return String.fromCodePoint(b[1] + ch.charCodeAt(0) - 97);
+    return ch;
+  };
   const SUBDIG = { "₀": "0", "₁": "1", "₂": "2", "₃": "3", "₄": "4", "₅": "5", "₆": "6", "₇": "7", "₈": "8", "₉": "9", "₊": "+", "₋": "-", "ₐ": "a", "ₑ": "e", "ᵢ": "i", "ⱼ": "j", "ₖ": "k", "ₙ": "n", "ₜ": "t", "ₓ": "x" };
   const SUPDIG = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9", "⁺": "+", "⁻": "-", "ⁿ": "n", "ⁱ": "i" };
   const TO_SUB = Object.fromEntries(Object.entries(SUBDIG).map(([k, v]) => [v, k]));
@@ -49,7 +72,7 @@
    */
   function normalizeInput(raw, opts) {
     opts = opts || {};
-    let s = String(raw || "").replace(/\r/g, "").trim();
+    let s = repairLatex(String(raw || "").replace(/\r/g, "").trim());
     let number = null;
     s = s.replace(/^\$\$([\s\S]*)\$\$$/, "$1").replace(/^\\\[([\s\S]*)\\\]$/, "$1").replace(/^\\\(([\s\S]*)\\\)$/, "$1").replace(/^\$([\s\S]*)\$$/, "$1");
     s = s.replace(/\\begin\{(equation|align|gather|displaymath)\*?\}([\s\S]*)\\end\{\1\*?\}/, "$2");
@@ -62,6 +85,24 @@
     s = s.trim();
     if (opts.forceLinear || !looksLatex(s)) s = linearToLatex(s, opts);
     return { tex: s.trim(), number };
+  }
+
+  /**
+   * Perbaiki LaTeX yang backslash-nya hilang saat disalin (mis. dari ChatGPT ke Word):
+   *   "\sigma!\left("  (aslinya \!\left)  -> "\sigma\left("
+   *   "…,\" di akhir baris (aslinya \\ ganti baris) -> "…,\\"
+   *   "[" / "]" pembungkus rumus baris (aslinya \[ \]) -> dibuang
+   */
+  function repairLatex(s) {
+    let t = String(s);
+    if (/^\[\s*\n[\s\S]*\n\s*\]$/.test(t)) t = t.replace(/^\[\s*\n/, "").replace(/\n\s*\]$/, "");
+    else if (/^\[\s[\s\S]*\\[a-zA-Z][\s\S]*\s\]$/.test(t)) t = t.replace(/^\[\s+/, "").replace(/\s+\]$/, "");
+    t = t.replace(/(^|[^\\])!(?=\\(?:left|right|big|Big|bigg|Bigg)\b)/g, "$1");
+    t = t.replace(/(^|[^\\])\\[ \t]*\n/g, "$1\\\\\n");
+    // di dalam aligned/cases/matrix tanpa "\\" sama sekali: "\ " adalah ganti baris yang kehilangan satu backslash
+    t = t.replace(/(\\begin\{(aligned|align\*?|gathered|cases|[pbvBV]?matrix|array)\}(?:\{[^}]*\})?)([\s\S]*?)(\\end\{\2\})/g, (m, a, env, body, z) =>
+      /\\\\/.test(body) ? m : a + body.replace(/(^|[^\\])\\(?=\s)/g, "$1\\\\") + z);
+    return t;
   }
 
   /** Teks biasa -> LaTeX: subskrip/superskrip Unicode, X1 -> X_{1}, x^2, sqrt(x), sum -> \sum */
@@ -162,7 +203,15 @@
         }
         return { t: "op", v: tk.v };
       }
-      if (tk.k === "{") { const r = parseRow("}"); if (peek() && peek().k === "}") next(); return r; }
+      if (tk.k === "{") {
+        const r = parseRow("}"); if (peek() && peek().k === "}") next();
+        // {,} = koma tanpa spasi (5{,}898); grup lepas berisi koma = himpunan {a, b} (backslash \{ hilang saat disalin)
+        if (r.items.length === 1 && r.items[0].t === "op" && r.items[0].v === ",") return r.items[0];
+        if (r.items.some((x) => x.t === "op" && x.v === ",") ||
+            (r.items.length === 1 && r.items[0].t === "delim" && r.items[0].open === "(" && /,/.test(toUnicode(r.items[0].e)) && peek() && (peek().k === "_" || peek().k === "^")))
+          return { t: "delim", open: "{", close: "}", e: r };
+        return r;
+      }
       if (tk.k === "}") return null;
       if (tk.k === "cmd") {
         const c = tk.v;
@@ -173,14 +222,14 @@
           if (peek() && peek().k === "op" && peek().v === "[") { next(); deg = parseRow("]"); if (peek() && peek().v === "]") next(); }
           return { t: "sqrt", e: parseArg(), deg };
         }
-        if (c === "text" || c === "textrm" || c === "mathrm" || c === "operatorname" || c === "textit" || c === "mbox" || c === "textup") {
+        if (c === "text" || c === "textrm" || c === "mathrm" || c === "operatorname" || c === "textit" || c === "mbox" || c === "textup" || c === "texttt" || c === "textsf") {
           const raw = readGroupRaw();
           if (c === "operatorname" || c === "mathrm") return { t: "fn", v: raw };
           return { t: "text", v: raw };
         }
         if (c === "mathbf" || c === "boldsymbol" || c === "bm" || c === "textbf") { const a = parseArg(); return { t: "style", sty: "b", e: a }; }
         if (c === "mathit") return parseArg();
-        if (c === "mathcal" || c === "mathbb" || c === "mathsf" || c === "mathtt") return parseArg();
+        if (SCRIPTS[c]) return { t: "style", scr: SCRIPTS[c], e: parseArg() };
         if (ACCENTS[c]) return { t: "acc", chr: ACCENTS[c], e: parseArg(), name: c };
         if (c === "left") {
           let open = next(); open = open ? (open.k === "cmd" ? (OPS[open.v] || (open.v === "." ? "" : open.v)) : open.v) : "(";
@@ -205,7 +254,8 @@
             const br = { pmatrix: ["(", ")"], bmatrix: ["[", "]"], Bmatrix: ["{", "}"], vmatrix: ["|", "|"], Vmatrix: ["‖", "‖"] }[env];
             return br ? { t: "delim", open: br[0], close: br[1], e: m } : m;
           }
-          return { t: "eqarr", rows: rows.map((r) => joinCells(r, "")) }; // aligned, gathered, split, ...
+          // aligned/split: "&" = titik rata (m:aln) agar baris-baris sejajar di tanda "="
+          return { t: "eqarr", rows: rows.map((r) => ({ t: "row", items: r.reduce((a, c, i) => a.concat(i ? [{ t: "aln" }] : [], [c]), []) })) };
         }
         if (c === "\\") return { t: "space", v: " " };
         return { t: "text", v: c }; // perintah tak dikenal: tampilkan namanya
@@ -260,6 +310,11 @@
         items.push(withScripts(a));
       }
       // operator n-ary: badan = elemen berikutnya (atau sisa baris bila elemen berikutnya kurung/huruf)
+      // fungsi (log, sin, …) mengikat argumen berikutnya — sebelum badan ∑ dikumpulkan
+      for (let k = 0; k < items.length; k++) {
+        const it = items[k];
+        if (it.t === "fn" && !LIMFUNCS.has(it.v) && !it.arg && k + 1 < items.length && items[k + 1].t !== "op" && items[k + 1].t !== "space") it.arg = items.splice(k + 1, 1)[0];
+      }
       for (let k = 0; k < items.length; k++) {
         const it = items[k];
         if (it.t === "nary" && it.e === null) {
@@ -267,7 +322,6 @@
           while (k + 1 < items.length && !(items[k + 1].t === "op" && /^[=+−±<>≤≥≈,]$/.test(items[k + 1].v))) body.push(items.splice(k + 1, 1)[0]);
           it.e = row(body);
         }
-        if (it.t === "fn" && !LIMFUNCS.has(it.v) && k + 1 < items.length && items[k + 1].t !== "op") it.arg = items.splice(k + 1, 1)[0];
         if (it.t === "limlow" && k + 1 < items.length && items[k + 1].t !== "op") it.arg = items.splice(k + 1, 1)[0];
       }
       return row(items);
@@ -332,12 +386,15 @@
     o = o || {};
     let rpr = "";
     if (o.nor) rpr += "<m:nor/>";
-    if (o.sty) rpr += `<m:sty m:val="${o.sty}"/>`;
+    if (o.scr) rpr += `<m:scr m:val="${o.scr}"/>`;
+    if (o.sty || o.scr) rpr += `<m:sty m:val="${o.sty || "p"}"/>`;
+    if (o._st && o._st.aln) { rpr += "<m:aln/>"; o._st.aln = false; }
     const w = `<w:rPr><w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math"/>${o.size ? `<w:sz w:val="${Math.round(o.size * 2)}"/><w:szCs w:val="${Math.round(o.size * 2)}"/>` : ""}</w:rPr>`;
     return `<m:r>${rpr ? `<m:rPr>${rpr}</m:rPr>` : ""}${w}<m:t xml:space="preserve">${xe(text)}</m:t></m:r>`;
   }
   function toOMML(node, o) {
     o = o || {};
+    if (!o._st) o = Object.assign({}, o, { _st: {} });
     const R = (n) => toOMML(n, o);
     const E = (n) => `<m:e>${R(n)}</m:e>`;
     if (!node) return "";
@@ -353,7 +410,7 @@
         if (node.arg) return `<m:func><m:fName>${name}</m:fName>${E(node.arg)}</m:func>`;
         return name;
       }
-      case "style": return toOMML(node.e, Object.assign({}, o, { sty: node.sty }));
+      case "style": return toOMML(node.e, Object.assign({}, o, node.scr ? { scr: node.scr } : { sty: node.sty }));
       case "frac": return `<m:f>${node.noBar ? '<m:fPr><m:type m:val="noBar"/></m:fPr>' : ""}<m:num>${R(node.n)}</m:num><m:den>${R(node.d)}</m:den></m:f>`;
       case "sqrt": return node.deg ? `<m:rad><m:deg>${R(node.deg)}</m:deg>${E(node.e)}</m:rad>` : `<m:rad><m:radPr><m:degHide m:val="1"/></m:radPr><m:deg/>${E(node.e)}</m:rad>`;
       case "sup": return `<m:sSup>${E(node.base)}<m:sup>${R(node.sup)}</m:sup></m:sSup>`;
@@ -371,6 +428,7 @@
         return `<m:m><m:mPr><m:mcs><m:mc><m:mcPr><m:count m:val="${w}"/><m:mcJc m:val="center"/></m:mcPr></m:mc></m:mcs></m:mPr>${node.rows.map((r) => `<m:mr>${Array.from({ length: w }, (_, i) => E(r[i] || { t: "row", items: [] })).join("")}</m:mr>`).join("")}</m:m>`;
       }
       case "omml": return node.xml;
+      case "aln": o._st.aln = true; return "";
       case "delim": return `<m:d><m:dPr><m:begChr m:val="${xe(node.open)}"/><m:endChr m:val="${xe(node.close)}"/></m:dPr>${E(node.e)}</m:d>`;
       case "acc": return node.chr === "\u0305" && node.name === "overline"
         ? `<m:bar><m:barPr><m:pos m:val="top"/></m:barPr>${E(node.e)}</m:bar>`
@@ -385,13 +443,18 @@
     if (!node) return "<mrow></mrow>";
     switch (node.t) {
       case "row": return `<mrow>${node.items.map(M).join("")}</mrow>`;
-      case "id": return `<mi>${xe(node.v)}</mi>`;
+      case "id": return node.styled ? `<mi mathvariant="normal">${xe(node.v)}</mi>` : `<mi>${xe(node.v)}</mi>`;
       case "num": return `<mn>${xe(node.v)}</mn>`;
       case "op": return `<mo>${xe(node.v)}</mo>`;
       case "space": return `<mspace width="0.3em"></mspace>`;
       case "text": return `<mtext>${xe(node.v)}</mtext>`;
       case "fn": return `<mi mathvariant="normal">${xe(node.v)}</mi>${node.arg ? `<mo>&#x2061;</mo>${M(node.arg)}` : ""}`;
-      case "style": return `<mstyle mathvariant="bold">${M(node.e)}</mstyle>`;
+      case "style": {
+        // MathML Core (Chromium/WebView2) hanya mengenal mathvariant="normal": huruf ℝ/𝒟/𝐖 ditulis langsung
+        const map = (x) => (x && (x.t === "id" || x.t === "num") ? Object.assign({}, x, { v: [...x.v].map((c) => styledChar(c, node.scr || "bold")).join(""), styled: true })
+          : x && x.t === "row" ? Object.assign({}, x, { items: x.items.map(map) }) : x && x.t === "sub" ? Object.assign({}, x, { base: map(x.base) }) : x);
+        return M(map(node.e));
+      }
       case "frac": return `<mfrac${node.noBar ? ' linethickness="0"' : ""}>${M(node.n)}${M(node.d)}</mfrac>`;
       case "sqrt": return node.deg ? `<mroot>${M(node.e)}${M(node.deg)}</mroot>` : `<msqrt>${M(node.e)}</msqrt>`;
       case "sup": return `<msup>${M(node.base)}${M(node.sup)}</msup>`;
@@ -423,7 +486,7 @@
       case "op": return /^[=+−±×÷≤≥≠≈<>→]$/.test(node.v) ? " " + node.v + " " : node.v;
       case "space": return " ";
       case "fn": return node.v + (node.arg ? " " + U(node.arg) : "");
-      case "style": return U(node.e);
+      case "style": return node.scr ? [...U(node.e)].map((c) => styledChar(c, node.scr)).join("") : U(node.e);
       case "frac": { const a = U(node.n), b = U(node.d); return (a.length > 1 ? "(" + a + ")" : a) + "/" + (b.length > 1 ? "(" + b + ")" : b); }
       case "sqrt": return "√" + (U(node.e).length > 1 ? "(" + U(node.e) + ")" : U(node.e));
       case "sup": return U(node.base) + scr(node.sup, TO_SUP, "^");
@@ -438,6 +501,56 @@
       case "acc": return U(node.e) + node.chr;
       default: return "";
     }
+  }
+
+  /* ---------------- keluaran: runs berformat (rumus di dalam kalimat) ---------------- */
+  /**
+   * AST -> runs [{text, i, b, sub, sup}] untuk ditulis sebagai teks biasa di paragraf:
+   * huruf variabel miring, subskrip/superskrip asli Word, ℝ/𝒟 sebagai huruf Unicode.
+   */
+  function toRuns(node) {
+    const out = [];
+    const push = (text, f) => { if (!text) return; const last = out[out.length - 1]; const r = Object.assign({ text, i: false, b: false, sub: false, sup: false }, f); if (last && last.i === r.i && last.b === r.b && last.sub === r.sub && last.sup === r.sup) last.text += text; else out.push(r); };
+    const REL = /^[=≠<>≤≥≈≡∼≃≅∝∈∉⊂⊆⊃⊇→←⇒⇔↦+−±∓×÷⋅⊙⊕⊗∪∩]$/;
+    const plainLen = (n) => toUnicode(n).trim().length;
+    function go(n, f) {
+      if (!n) return;
+      switch (n.t) {
+        case "row": n.items.forEach((x) => go(x, f)); return;
+        case "id": for (const ch of [...n.v]) push(ch, Object.assign({}, f, { i: f.upright ? false : /[A-Za-zα-ω]/.test(ch) && !f.b ? true : f.i })); return;
+        case "num": push(n.v, f); return;
+        case "op": push(!f.sub && !f.sup && REL.test(n.v) ? " " + n.v + " " : n.v === "," && !f.sub && !f.sup ? ", " : n.v, Object.assign({}, f, { i: false })); return;
+        case "space": push(" ", f); return;
+        case "text": push(n.v, Object.assign({}, f, { i: false })); return;
+        case "fn": push(n.v, Object.assign({}, f, { i: false })); if (n.arg) { if (n.arg.t !== "delim") push(" ", f); go(n.arg, f); } return;
+        case "style":
+          if (n.scr) { push([...toUnicode(n.e)].map((c) => styledChar(c, n.scr)).join(""), Object.assign({}, f, { i: false })); return; }
+          go(n.e, Object.assign({}, f, { b: true, i: false, upright: true })); return;
+        case "frac": {
+          const wrap = (x) => plainLen(x) > 1 && x.t !== "delim";
+          if (wrap(n.n)) push("(", f); go(n.n, f); if (wrap(n.n)) push(")", f);
+          push("/", Object.assign({}, f, { i: false }));
+          if (wrap(n.d)) push("(", f); go(n.d, f); if (wrap(n.d)) push(")", f);
+          return;
+        }
+        case "sqrt": push("√", f); { const w = plainLen(n.e) > 1; if (w) push("(", f); go(n.e, f); if (w) push(")", f); } return;
+        case "sup": go(n.base, f); go(n.sup, Object.assign({}, f, { sup: true, sub: false })); return;
+        case "sub": go(n.base, f); go(n.sub, Object.assign({}, f, { sub: true, sup: false })); return;
+        case "subsup": go(n.base, f); go(n.sub, Object.assign({}, f, { sub: true, sup: false })); go(n.sup, Object.assign({}, f, { sup: true, sub: false })); return;
+        case "nary": push(n.chr, Object.assign({}, f, { i: false })); if (n.sub) go(n.sub, Object.assign({}, f, { sub: true })); if (n.sup) go(n.sup, Object.assign({}, f, { sup: true })); push(" ", f); go(n.e, f); return;
+        case "limlow": push(n.fn.v || "lim", Object.assign({}, f, { i: false })); go(n.lim, Object.assign({}, f, { sub: true })); push(" ", f); if (n.arg) go(n.arg, f); return;
+        case "delim": push(n.open, Object.assign({}, f, { i: false })); go(n.e, f); push(n.close, Object.assign({}, f, { i: false })); return;
+        case "acc": { const before = out.length; go(n.e, f); const last = out[out.length - 1]; if (out.length > before && last) last.text += n.chr; return; }
+        case "eqarr": n.rows.forEach((r, k) => { if (k) push("; ", f); go(r, f); }); return;
+        case "matrix": n.rows.forEach((r, k) => { if (k) push("; ", f); r.forEach((c, j) => { if (j) push(", ", f); go(c, f); }); }); return;
+        case "omml": push(n.text || "", f); return;
+        default: return;
+      }
+    }
+    go(node, {});
+    // rapikan spasi ganda
+    out.forEach((r, k) => { r.text = r.text.replace(/ {2,}/g, " "); if (k === 0) r.text = r.text.replace(/^ /, ""); if (k === out.length - 1) r.text = r.text.replace(/ $/, ""); });
+    return out.filter((r) => r.text);
   }
 
   /* ---------------- paket OOXML untuk Word ---------------- */
@@ -614,7 +727,7 @@
       case "space": return node.v ? "\\," : "";
       case "text": return "\\text{" + node.v + "}";
       case "fn": { const nm = TEX_FUNCS.has(node.v) ? "\\" + node.v : "\\operatorname{" + node.v + "}"; return nm + (node.arg ? (node.arg.t === "delim" ? "" : " ") + L(node.arg) : " "); }
-      case "style": return "\\mathbf{" + L(node.e) + "}";
+      case "style": { const inv = { "double-struck": "mathbb", script: "mathcal", fraktur: "mathfrak", "sans-serif": "mathsf", monospace: "mathtt" }; return "\\" + (node.scr ? inv[node.scr] || "mathrm" : "mathbf") + "{" + L(node.e) + "}"; }
       case "frac": return node.noBar ? "\\binom" + g(node.n) + g(node.d) : "\\frac{" + L(node.n) + "}{" + L(node.d) + "}";
       case "sqrt": return "\\sqrt" + (node.deg ? "[" + L(node.deg) + "]" : "") + "{" + L(node.e) + "}";
       case "sup": return g(node.base) + "^" + g(node.sup);
@@ -632,6 +745,7 @@
       }
       case "acc": return "\\" + (node.name === "overline" ? "overline" : ACC_REV[node.chr] || "hat") + "{" + L(node.e) + "}";
       case "eqarr": return "\\begin{aligned}" + node.rows.map(L).join(" \\\\ ") + "\\end{aligned}";
+      case "aln": return "&";
       case "matrix": return "\\begin{matrix}" + node.rows.map((r) => r.map(L).join(" & ")).join(" \\\\ ") + "\\end{matrix}";
       case "omml": return node.text || "";
       default: return "";
@@ -671,5 +785,5 @@
     { group: "Klaster", name: "Jarak Euclidean", tex: "d\\left(x,y\\right)=\\sqrt{\\sum_{i=1}^{n}\\left(x_i-y_i\\right)^2}" },
   ];
 
-  return { parse, parseLatex, normalizeInput, linearToLatex, fromMathML, toOMML, toMathML, toUnicode, toLatex, buildPackage, buildEquationParagraph, buildEquationPackage, wrapPackage, ommlFromWordHtml, ommlToAst, ommlXmlToAst, LIBRARY, looksLatex };
+  return { toRuns, repairLatex, parse, parseLatex, normalizeInput, linearToLatex, fromMathML, toOMML, toMathML, toUnicode, toLatex, buildPackage, buildEquationParagraph, buildEquationPackage, wrapPackage, ommlFromWordHtml, ommlToAst, ommlXmlToAst, LIBRARY, looksLatex };
 });

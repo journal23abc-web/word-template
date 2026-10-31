@@ -89,6 +89,13 @@ tests/                uji otomatis (Playwright)
 </code></pre>
 <p>Kebutuhan: Word 2016 ke atas / Microsoft 365 / Word Mac / Word web. Fitur &quot;Hapus sisipan terakhir&quot; butuh WordApi 1.4 (Microsoft 365 / Word 2021).</p>
 <h2>6. Catatan versi</h2>
+<p><strong>v9.1 (rumus):</strong></p>
+<ul>
+<li>Rumus dari ChatGPT yang <strong>backslash-nya hilang</strong> saat disalin (rumus diapit <code>[</code> … <code>]</code> di baris sendiri, <code>(x_i)</code> di dalam kalimat, <code>\sigma!\left(</code>, <code>{0,1}</code>) kini dikenali, baik ditempel sebagai teks polos maupun dari Word (satu baris per paragraf). Rumus baris menjadi persamaan Word bernomor (dari <code>\tag{1}</code>), rumus dalam kalimat menjadi huruf miring dengan subskrip/superskrip asli.</li>
+<li><strong>Rapikan</strong> juga memperbaiki rumus seperti itu yang sudah terlanjur ada di dokumen.</li>
+<li>Huruf khusus ℝ, 𝒟, ℒ (<code>\mathbb</code>, <code>\mathcal</code>), simbol ⊙ ⊕ ⊗ dan lainnya, <code>aligned</code> dengan baris rata di tanda &quot;=&quot;, serta <code>\log</code>/<code>\sum</code> di dalam rumus panjang ditampilkan dengan benar.</li>
+<li>Kalimat pengantar rumus (&quot;The gating vector is computed as&quot;) tidak lagi dianggap sub-heading; &quot;Algorithm 3.&quot; dikenali sebagai caption.</li>
+</ul>
 <p><strong>v9:</strong></p>
 <ul>
 <li>Template jurnal baru.</li>

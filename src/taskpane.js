@@ -144,6 +144,8 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
       if (n >= max) break;
       let t = r.text.slice(0, max - n); n += t.length;
       t = esc(t);
+      if (r.sub) t = "<sub>" + t + "</sub>";
+      if (r.sup) t = "<sup>" + t + "</sup>";
       if (r.i) t = "<i>" + t + "</i>";
       if (r.b) t = "<b>" + t + "</b>";
       out += t;
@@ -366,7 +368,7 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     try {
       const r = await WordOps.reformatSection(key, state.profile);
       const warn = r.tableErrors || r.equationErrors || r.mathType;
-      toast(`✓ ${r.formatted} paragraf dirapikan (${r.headings} sub-heading${r.quotes ? `, ${r.quotes} kutipan` : ""}${r.tables ? `, ${r.tables} tabel` : ""}${r.equations ? `, ${r.equations} rumus diubah jadi persamaan Word` : ""}).`
+      toast(`✓ ${r.formatted} paragraf dirapikan (${r.headings} sub-heading${r.quotes ? `, ${r.quotes} kutipan` : ""}${r.tables ? `, ${r.tables} tabel` : ""}${r.equations ? `, ${r.equations} rumus diubah jadi persamaan Word` : ""}${r.inlineMath ? `, ${r.inlineMath} rumus dalam kalimat dirapikan` : ""}).`
         + (r.tableErrors ? ` ${r.tableErrors} tabel gagal dirapikan (mungkin sel gabungan rumit).` : "")
         + (r.equationErrors ? ` ${r.equationErrors} rumus gagal diubah — coba blok barisnya lalu pakai tab Rumus.` : "")
         + (r.mathType ? ` ${r.mathType} rumus berupa objek MathType/Equation 3.0 — tidak bisa diubah otomatis; klik dua kali objeknya lalu simpan ulang sebagai persamaan Word.` : ""), warn ? "err" : "ok", warn ? 9000 : 5000);

@@ -104,6 +104,12 @@ Kebutuhan: Word 2016 ke atas / Microsoft 365 / Word Mac / Word web. Fitur "Hapus
 
 ## 6. Catatan versi
 
+**v9.1 (rumus):**
+- Rumus dari ChatGPT yang **backslash-nya hilang** saat disalin (rumus diapit `[` … `]` di baris sendiri, `(x_i)` di dalam kalimat, `\sigma!\left(`, `{0,1}`) kini dikenali, baik ditempel sebagai teks polos maupun dari Word (satu baris per paragraf). Rumus baris menjadi persamaan Word bernomor (dari `\tag{1}`), rumus dalam kalimat menjadi huruf miring dengan subskrip/superskrip asli.
+- **Rapikan** juga memperbaiki rumus seperti itu yang sudah terlanjur ada di dokumen.
+- Huruf khusus ℝ, 𝒟, ℒ (`\mathbb`, `\mathcal`), simbol ⊙ ⊕ ⊗ dan lainnya, `aligned` dengan baris rata di tanda "=", serta `\log`/`\sum` di dalam rumus panjang ditampilkan dengan benar.
+- Kalimat pengantar rumus ("The gating vector is computed as") tidak lagi dianggap sub-heading; "Algorithm 3." dikenali sebagai caption.
+
 **v9:**
 - Template jurnal baru.
 - Daftar pustaka gaya **IEEE** bernomor ([1] …): nomor dipertahankan, nama jurnal / judul buku dimiringkan otomatis bila tempelan tanpa italic, "doi: 10.…" tidak diubah, dan referensi yang terputus (salinan PDF) disambung dengan benar. Atur di Template → Referensi → *Gaya referensi*.

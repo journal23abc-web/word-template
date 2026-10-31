@@ -591,7 +591,9 @@
       const h = /^(#{1,6})\s+(.*)$/.exec(p);
       if (h) { tag = "h" + h[1].length; p = h[2]; }
       p = p.replace(/^\s*(?:[-*•▪◦·]\s+)/, ""); // bullet
-      const runs = normalizeRuns(mdInline(p).map((r) => ({ text: r.text, b: !!r.b, i: !!r.i, sup: false, sub: false, link: "" })));
+      // paragraf berisi LaTeX: jangan tafsirkan "_" sebagai italic Markdown (x_i)
+      const md = /\\[a-zA-Z]{2,}|[_^]\{/.test(p) ? [{ text: p }] : mdInline(p);
+      const runs = normalizeRuns(md.map((r) => ({ text: r.text, b: !!r.b, i: !!r.i, sup: false, sub: false, link: "" })));
       if (runs.length) blocks.push({ kind: "p", tag, cls: "", runs, md: !!h });
     }
     return { blocks: attachEquationNumbers(blocks), images: 0, tables: 0, source: "text" };
@@ -643,16 +645,119 @@
     // HTML dipakai bila memuat struktur paragraf; jika tidak, pakai teks biasa
     if (html && (/<(p|div|h[1-6]|li|br|table|tr|dd|dt|blockquote|math|mjx-container)\b/i.test(html) || /katex|mwe-math|msEquation/i.test(html))) {
       const r = parseHtml(html, ParserImpl, { flattenTables: !!(sec && sec.kind === "abstract") });
-      if (r.blocks.length) return r;
+      if (r.blocks.length) return isRef ? r : recoverLatex(r);
     }
-    return parseText(clip.text || "", { mergeBrokenLines: profile.detect.mergeBrokenLines && !isRef });
+    const r = parseText(clip.text || "", { mergeBrokenLines: profile.detect.mergeBrokenLines && !isRef });
+    return isRef ? r : recoverLatex(r);
+  }
+
+  /* ---------------- LaTeX "polos" (mis. salinan ChatGPT yang backslash-nya hilang) ---------------- */
+  const latexish = (t) => /\\[a-zA-Z]{2,}|[_^]\{|\\[,;!{}|]/.test(t);
+  const OPEN_M = /^(\\\[|\[|\$\$)$/, CLOSE_M = /^(\\\]|\]|\$\$)$/;
+  function mathBlock(tex, T) {
+    const r = T.parse(tex);
+    if (r.error || !r.ast || !r.ast.items || !r.ast.items.length) return null;
+    const text = T.toUnicode(r.ast).trim();
+    return { kind: "p", tag: "p", cls: "", runs: [{ text, b: false, i: false, sup: false, sub: false, link: "" }], math: { ast: r.ast, tex: r.tex, number: r.number, display: true, text, source: "latex" } };
+  }
+  /** Cari rumus dalam kalimat: \(…\), $…$, dan (…) berisi LaTeX (backslash \( hilang). */
+  function inlineMathSpans(text, lost) {
+    const spans = [];
+    let m;
+    const reP = /\\\(([\s\S]+?)\\\)/g;
+    while ((m = reP.exec(text))) spans.push([m.index, m.index + m[0].length, m[1]]);
+    const reD = /\$([^\s$](?:[^$\n]*?[^\s$])?)\$/g;
+    while ((m = reD.exec(text))) if (/[\\^_{}]/.test(m[1]) || /^[A-Za-z]$/.test(m[1])) spans.push([m.index, m.index + m[0].length, m[1]]);
+    // ( … ) seimbang
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] !== "(" || text[i - 1] === "\\") continue;
+      let d = 0, j = i;
+      for (; j < text.length; j++) { if (text[j] === "(") d++; else if (text[j] === ")") { d--; if (!d) break; } }
+      if (j >= text.length) continue;
+      const c = text.slice(i + 1, j).trim();
+      const strong = /\\[a-zA-Z]{2,}/.test(c) && !/\s\p{Ll}{3,}\s+\p{Ll}{3,}\s/u.test(c.replace(/\\[a-zA-Z]+\{[^}]*\}/g, ""));
+      const weak = lost && (/[_^]/.test(c) || /^\{[^{}]*\}$/.test(c) || /^[A-Za-z]$/.test(c) || /^[A-Za-z]\s*[=<>]\s*[\d.,]+$/.test(c) || /^\d*\.\d+$/.test(c)) && !/\s\p{L}{3,}\s/u.test(c);
+      if (strong || weak) { spans.push([i, j + 1, c]); i = j; }
+    }
+    spans.sort((a, b) => a[0] - b[0]);
+    return spans.filter((sp, k) => !spans.slice(0, k).some((o) => sp[0] < o[1]));
+  }
+  /**
+   * Cari rumus baris LaTeX dalam daftar teks paragraf: "[" … "]" terpisah, "[ … ]" satu paragraf, atau "]" tanpa pembuka.
+   * return [{start, end, tex}] (indeks inklusif)
+   */
+  function findDisplayLatex(texts) {
+    const groups = [];
+    for (let i = 0; i < texts.length; i++) {
+      const t = (texts[i] || "").trim();
+      if (OPEN_M.test(t)) {
+        let j = i + 1; const lines = [];
+        while (j < texts.length && j - i < 60 && !CLOSE_M.test((texts[j] || "").trim())) { lines.push(texts[j] || ""); j++; }
+        if (j < texts.length && lines.length && (latexish(lines.join(" ")) || /=/.test(lines.join("")))) { groups.push({ start: i, end: j, tex: lines.join("\n") }); i = j; continue; }
+      }
+      const one = /^(?:\\\[|\[(?=\s))\s*([\s\S]+?)\s*(?:\\\]|\])$/.exec(t) || /^\$\$([\s\S]+)\$\$$/.exec(t);
+      if (one && (latexish(one[1]) || /=/.test(one[1]))) { groups.push({ start: i, end: i, tex: one[1] }); continue; }
+      if (CLOSE_M.test(t) || (/\s\]$/.test(t) && latexish(t) && !/^\[/.test(t))) {
+        const lines = CLOSE_M.test(t) ? [] : [t.replace(/\s*\]$/, "")];
+        const floor = groups.length ? groups[groups.length - 1].end + 1 : 0;
+        let k = i - 1;
+        while (k >= floor && i - k <= 30) {
+          const tt = (texts[k] || "").trim();
+          if (!tt || !(latexish(tt) || /^[=+\-−]/.test(tt) || /^[+\-=]$/.test(tt))) break;
+          lines.unshift(tt); k--;
+        }
+        if (lines.length && latexish(lines.join(" "))) groups.push({ start: k + 1, end: i, tex: lines.join("\n") });
+      }
+    }
+    return groups;
+  }
+  const isLostLatex = (all, foundDisplay) => !!foundDisplay || (String(all).match(/\(\\[a-zA-Z]/g) || []).length >= 2;
+  function recoverLatex(res) {
+    const T = TM();
+    if (!T) return res;
+    const blocks = res.blocks;
+    const texts = blocks.map((b) => (b.kind === "p" && !b.math ? plain(b.runs) : ""));
+    const all = texts.join("\n");
+    if (!/\\[a-zA-Z]{2,}|[_^]\{|\$/.test(all)) return res;
+    const groups = findDisplayLatex(texts);
+    const out = [];
+    let g = 0, made = 0;
+    for (let i = 0; i < blocks.length; i++) {
+      const gr = groups[g];
+      if (gr && gr.start === i) {
+        const mb = mathBlock(gr.tex, T);
+        g++;
+        if (mb) { out.push(mb); i = gr.end; made++; continue; }
+      }
+      out.push(blocks[i]);
+    }
+    let lost = isLostLatex(all, made);
+    // rumus di dalam kalimat -> runs berformat (miring, subskrip, superskrip)
+    const final = out.map((b) => {
+      if (b.kind !== "p" || b.math) return b;
+      const text = plain(b.runs);
+      const spans = inlineMathSpans(text, lost);
+      if (!spans.length) return b;
+      let runs = [], pos = 0, changed = false;
+      for (const [a, e, tex] of spans) {
+        const r = T.parse(tex);
+        if (r.error || !r.ast) continue;
+        runs = runs.concat(sliceRuns(b.runs, pos, a));
+        runs = runs.concat(T.toRuns(r.ast).map((x) => Object.assign({ link: "" }, x, { mathInline: true })));
+        pos = e; changed = true;
+      }
+      if (!changed) return b;
+      runs = runs.concat(sliceRuns(b.runs, pos, text.length));
+      return Object.assign({}, b, { runs: normalizeRuns(runs) });
+    });
+    return Object.assign({}, res, { blocks: attachEquationNumbers(final) });
   }
 
   /* ------------------------------------------------------------------ */
   /*  Klasifikasi                                                        */
   /* ------------------------------------------------------------------ */
-  const RE_CAPTION = /^(Table|Tables|Figure|Fig\.|Tabel|Gambar|Grafik|Chart|Diagram)\s+(\d+[A-Za-z]?|[IVX]+)\s*[.:]/i;
-  const RE_LABEL_ONLY = /^(Table|Tabel|Figure|Fig\.|Gambar|Grafik|Chart|Diagram)\s+(\d+[A-Za-z]?|[IVX]+)\s*[.:]?\s*$/i;
+  const RE_CAPTION = /^(Table|Tables|Figure|Fig\.|Tabel|Gambar|Grafik|Chart|Diagram|Algorithm|Algoritma)\s+(\d+[A-Za-z]?|[IVX]+)\s*[.:]/i;
+  const RE_LABEL_ONLY = /^(Table|Tabel|Figure|Fig\.|Gambar|Grafik|Chart|Diagram|Algorithm|Algoritma)\s+(\d+[A-Za-z]?|[IVX]+)\s*[.:]?\s*$/i;
   /** Caption gaya APA 7 dua baris ("Figure 1" lalu judul italic) -> satu caption "Figure 1. Judul". */
   function mergeCaptionLabels(blocks) {
     const out = [];
@@ -783,8 +888,11 @@
       if (looksLikeEquation(text)) { items.push({ type: "equation", runs }); continue; }
       // heading tidak boleh paragraf terakhir yang berdiri sendiri? -> tetap boleh, tapi butuh sinyal kuat
       const isLast = idx === blocks.length - 1;
+      const nextBl = blocks[idx + 1];
+      const leadIn = (nextBl && nextBl.math) || /\b(is|are|be|as|by|gives|follows|where|that|then|of|to|the|and)\s*:?$/i.test(text.trim());
       if (looksLikeHeading(text, runs, bl, det)) {
         const strong = (bl.tag && /^h[1-6]$/.test(bl.tag)) || runs.every((r) => r.b || !/\S/.test(r.text)) || RE_NUMBERED.test(text.trim());
+        if (leadIn && !strong) { items.push({ type: "body", runs }); continue; }
         if (!isLast || strong) {
           const next = blocks[idx + 1];
           const nextText = next && next.kind === "p" ? plain(next.runs) : "";
@@ -1467,7 +1575,7 @@
     classifyAbstract, abstractParagraphs, pickAbstractTarget, abstractTargetsInCell, isAbstractNoise, RE_ABSTRACT_HEAD,
     DEFAULT_PROFILE, PRESETS, presetFor, mergeProfile, clone,
     parseInput, parseHtml, parseText, classify, classifyReferences, classifyExisting,
-    ieeeAutoItalic, paraFormat, finalRuns, prepareItems, prepareEquation, equationOptions, runsFromOoxml, ooxmlKinds, cleanAttribution, looksLikeEquation, looksLikeAttribution, countWords, plain, normalizeRuns, titleCase, apaAutoItalic, linkUrls,
+    ieeeAutoItalic, paraFormat, finalRuns, prepareItems, prepareEquation, equationOptions, findDisplayLatex, inlineMathSpans, isLostLatex, runsFromOoxml, ooxmlKinds, cleanAttribution, looksLikeEquation, looksLikeAttribution, countWords, plain, normalizeRuns, titleCase, apaAutoItalic, linkUrls,
     findSectionHeadings, sectionRange, pickAnchor, planNewSection, countDocument, normHead,
     CM,
   };
