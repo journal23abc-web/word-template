@@ -91,6 +91,15 @@ tests/                uji otomatis (Playwright)
 </code></pre>
 <p>Kebutuhan: Word 2016 ke atas / Microsoft 365 / Word Mac / Word web. Fitur &quot;Hapus sisipan terakhir&quot; butuh WordApi 1.4 (Microsoft 365 / Word 2021).</p>
 <h2>6. Catatan versi</h2>
+<p><strong>v10.1 (perbaikan error &quot;GeneralException (Paragraph.insertOoxml)&quot;):</strong></p>
+<ul>
+<li>Rumus yang disalin dari persamaan Word sebagai teks (huruf matematika 𝑖 𝑡 𝜀) kini dibaca utuh; sebelumnya hurufnya terpotong sehingga Word menolak rumusnya. <code>SHIP𝑖𝑡</code>, <code>Yit</code> → SHIPᵢₜ, Yᵢₜ; <code>1.58×10−7</code> → 1.58 × 10⁻⁷.</li>
+<li>Teks biasa di dalam rumus (<code>\text{…}</code>) ditulis sesuai aturan format rumus Word. Semua rumus yang dibuat add-in kini diperiksa terhadap aturan itu di uji otomatis.</li>
+<li>Bila Word tetap menolak satu rumus, rumus itu disisipkan sebagai teks berformat (subskrip/superskrip) dan <strong>sisipan lain tetap berjalan</strong>; jumlahnya dilaporkan.</li>
+<li>Baris definisi/daftar seperti &quot;Yit = District-level economic growth …&quot; atau &quot;Volume Loading (VOLLOADING = …; p = …)&quot; tidak lagi dianggap rumus atau sub-heading.</li>
+<li>Tempel teks polos dari Word: tabel (sel dipisah Tab) disusun kembali jadi tabel, termasuk sel yang terpotong ganti baris; &quot;a. Maritime …&quot; tidak lagi tergabung dengan judul di atasnya.</li>
+<li>Tempel keseluruhan: judul bagian yang diketik huruf biasa tetapi tampil KAPITAL karena format Word (gaya Heading / All Caps) juga dikenali.</li>
+</ul>
 <p><strong>v10:</strong></p>
 <ul>
 <li>Menu baru <strong>Tempel keseluruhan</strong> (paling atas): satu kali tempel untuk seluruh artikel, dipecah otomatis per Heading 1 sesuai daftar bagian template jurnal. Menu tempel lama berganti nama menjadi <strong>Tempel bagian</strong>.</li>

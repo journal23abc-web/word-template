@@ -123,7 +123,7 @@
     opts = opts || {};
     const items = E.prepareItems(items0, profile); // kutipan: format APA 7
     let cursor = start, cursorIsTable = false, detachNext = !!opts.anchorIsList;
-    let first = null, last = null, count = 0, sinceSync = 0, equations = 0;
+    let first = null, last = null, count = 0, sinceSync = 0, equations = 0, eqFallback = 0;
     const tables = [];
     for (const it of items) {
       if (it.type === "skip") continue;
@@ -145,8 +145,24 @@
         const p = cursor.insertParagraph("", loc);
         if (detachNext) { p.detachFromList(); detachNext = false; }
         if (opts.textWidthCm == null) opts.textWidthCm = await readTextWidthCm(context);
-        const pkg = M().buildEquationPackage(it.eq, E.equationOptions(profile, { number: it.eq.number, textWidthCm: opts.textWidthCm || undefined }));
-        const eqp = await placeEquation(context, p, pkg);
+        // coba: OMML asli (dari Word) -> OMML buatan add-in -> teks berformat; satu rumus gagal tidak menghentikan semuanya
+        const tries = [];
+        if (it.eq.omml) tries.push({ omml: it.eq.omml });
+        if (it.eq.ast) tries.push({ ast: it.eq.ast });
+        let eqp = null;
+        for (const eq of tries) {
+          try {
+            const pkg = M().buildEquationPackage(eq, E.equationOptions(profile, { number: it.eq.number, textWidthCm: opts.textWidthCm || undefined }));
+            eqp = await placeEquation(context, p, pkg);
+            break;
+          } catch (e) { console.warn("rumus ditolak Word, coba cara lain", e, eq); }
+        }
+        if (!eqp) {
+          const runs = it.eq.ast ? M().toRuns(it.eq.ast) : (it.runs || []);
+          const num = it.eq.number ? [{ text: "  (" + it.eq.number + ")" }] : [];
+          formatNewParagraph(p, Object.assign({}, it, { type: "equation", runs: runs.concat(num) }), profile);
+          eqp = p; eqFallback++;
+        }
         first = first || eqp; last = eqp; cursor = eqp; cursorIsTable = false; loc = "After"; count++; equations++;
         sinceSync = 0;
         continue;
@@ -165,7 +181,7 @@
       for (const t of tables) formatTable(t, profile);
       await context.sync();
     }
-    return { first, last, count, equations, endsWithTable: cursorIsTable };
+    return { first, last, count, equations, eqFallback, endsWithTable: cursorIsTable };
   }
 
   /* ---------------- rumus (OMML) ---------------- */
@@ -342,7 +358,7 @@
 
       // hitung ulang kata
       const st = await readStructure(context, profile);
-      return { inserted: res.count, created, missingStyles: missing, count: E.countDocument(st.infos, st.heads, profile) };
+      return { inserted: res.count, created, missingStyles: missing, eqFallback: res.eqFallback || 0, count: E.countDocument(st.infos, st.heads, profile) };
     });
   }
 

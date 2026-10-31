@@ -319,6 +319,9 @@
     if (fw) f.b = /bold|bolder|[6-9]00/.test(fw) ? true : /normal|lighter|[1-4]00/.test(fw) ? false : f.b;
     const fs = styleProp(el, "font-style");
     if (fs) f.i = /italic|oblique/.test(fs) ? true : fs === "normal" ? false : f.i;
+    const tt = styleProp(el, "text-transform");
+    if (tt) f.upper = /uppercase/.test(tt) ? true : tt === "none" ? false : f.upper;
+    if (/mso-style-name:\s*"?Heading/i.test(el.getAttribute("style") || "")) f.headingStyle = true;
     const va = styleProp(el, "vertical-align");
     if (va) { if (/super/.test(va)) f.sup = true; else if (/sub/.test(va)) f.sub = true; else if (va === "baseline") { f.sup = false; f.sub = false; } }
     return f;
@@ -421,7 +424,7 @@
         if (!txt) return;
         if (!cur && !/\S/.test(txt)) return;
         ensure(blockTag, blockCls);
-        cur.runs.push({ text: txt, b: !!fmt.b, i: !!fmt.i, sup: !!fmt.sup, sub: !!fmt.sub, link: fmt.href || "" });
+        cur.runs.push({ text: fmt.upper ? txt.toUpperCase() : txt, b: !!fmt.b, i: !!fmt.i, sup: !!fmt.sup, sub: !!fmt.sub, link: fmt.href || "" });
         return;
       }
       if (node.nodeType !== 1) return;
@@ -540,7 +543,8 @@
   }
 
   const endsSentence = (s) => /[.!?:;)"”’\]]\s*$/.test(s);
-  const startsLower = (s) => /^[\p{Ll}(\[,;–-]/u.test(s.trim());
+  // baris lanjutan (huruf kecil di awal) — kecuali penanda daftar "a. …", "ii) …"
+  const startsLower = (s) => /^[\p{Ll}(\[,;–-]/u.test(s.trim()) && !/^(?:[a-z]|[ivx]{1,4})[.)]\s/.test(s.trim());
 
   function parseText(text, opts) {
     opts = opts || {};
@@ -557,6 +561,35 @@
       text = text.replace(/\\\(([\s\S]+?)\\\)/g, uni);
       text = text.replace(/\$([^\s$](?:[^$\n]*?[^\s$])?)\$/g, (m, tex) => (/[\\^_{}]/.test(tex) || /^[A-Za-z]$/.test(tex) ? uni(m, tex) : m));
     }
+    // tabel yang disalin sebagai teks: sel dipisah Tab (Word/Excel). Baris yang sel terakhirnya terpotong ganti baris disambung.
+    const tabTables = [];
+    {
+      const L = text.split("\n"), outL = [];
+      const isMarker = (c) => /^([•▪◦·\-–*]|\d+[.)]|[a-zA-Z][.)]|[ivx]{1,4}[.)])$/.test(c.trim());
+      const isTabRow = (l) => /\t/.test(l) && l.split("\t").filter((c) => c.trim()).length >= 2 && !isMarker(l.split("\t")[0]);
+      for (let i = 0; i < L.length; i++) {
+        if (!isTabRow(L[i]) || !(isTabRow(L[i + 1] || "") || isTabRow(L[i + 2] || ""))) { outL.push(L[i]); continue; }
+        let j = i; const raw = [];
+        while (j < L.length && (isTabRow(L[j]) || (L[j].trim() && !/\t/.test(L[j]) && raw.length && isTabRow(L[j + 1] || "") && L[j].length < 80))) { raw.push(L[j]); j++; }
+        const cells = raw.map((l) => l.replace(/\t+\s*$/, "").split("\t").map((c) => c.trim()));
+        const counts = cells.map((c) => c.length).sort((a, b) => a - b);
+        const want = counts[Math.floor(counts.length * 0.75)] || counts[counts.length - 1];
+        const rows = [];
+        for (let r = 0; r < cells.length; r++) {
+          let row = cells[r].slice();
+          while (row.length < want && r + 1 < cells.length && row.length + cells[r + 1].length - 1 <= want) {
+            const nx = cells[++r];
+            row[row.length - 1] = (row[row.length - 1] + " " + nx[0]).trim();
+            row = row.concat(nx.slice(1));
+          }
+          while (row.length < want) row.push("");
+          rows.push(row.slice(0, Math.max(want, row.length)));
+        }
+        if (rows.length >= 2) { tabTables.push(rows); outL.push("\u0003T" + (tabTables.length - 1) + "\u0003"); i = j - 1; }
+        else outL.push(...raw), i = j - 1;
+      }
+      text = outL.join("\n");
+    }
     const rawLines = text.split("\n");
     const hasBlankSep = /\n[ \t ]*\n/.test(text.trim());
     let paras = [];
@@ -572,7 +605,7 @@
         // jangan sambung bila baris pertama heading markdown
         if (ls.length > 1 && /^#{1,6}\s/.test(ls[0])) return [ls[0], ls.slice(1).join(" ")];
         // baris panjang (salinan Word/web, satu baris = satu paragraf) tidak disambung; baris pendek seragam (PDF) disambung
-        if (merge && ls.length > 1 && ls.filter((l) => l.length > 160).length >= Math.max(1, ls.length * 0.25)) return mergeLines(ls);
+        if (merge && ls.length > 1) return mergeLines(ls); // hanya baris lanjutan yang disambung (PDF), judul/kalimat utuh tetap terpisah
         return [joinLines(ls)];
       }).flat();
     } else {
@@ -580,9 +613,11 @@
       if (merge && ls.length > 2) paras = mergeLines(ls);
       else paras = ls;
     }
-    if (maths.length) paras = paras.flatMap((p) => p.split(/\s*(\u0001M\d+\u0001)\s*/).filter((x) => x.trim()));
+    if (maths.length || tabTables.length) paras = paras.flatMap((p) => p.split(/\s*(\u0001M\d+\u0001|\u0003T\d+\u0003)\s*/).filter((x) => x.trim()));
     const blocks = [];
     for (let p of paras) {
+      const tt = /^\u0003T(\d+)\u0003$/.exec(p);
+      if (tt) { blocks.push({ kind: "table", rows: tabTables[+tt[1]] }); continue; }
       const mm = /^\u0001M(\d+)\u0001$/.exec(p);
       if (mm) {
         const r = T.parse(maths[+mm[1]]);
@@ -601,7 +636,7 @@
       const runs = normalizeRuns(md.map((r) => ({ text: r.text, b: !!r.b, i: !!r.i, sup: false, sub: false, link: "" })));
       if (runs.length) blocks.push({ kind: "p", tag, cls: "", runs, md: !!h });
     }
-    return { blocks: attachEquationNumbers(blocks), images: 0, tables: 0, source: "text" };
+    return { blocks: attachEquationNumbers(blocks), images: 0, tables: tabTables.length, source: "text" };
   }
 
   function joinLines(ls) {
@@ -623,7 +658,7 @@
       const out0 = [];
       for (const l of ls) {
         const prev = out0[out0.length - 1];
-        if (prev != null && !endsSentence(prev) && /^\p{Ll}/u.test(l)) out0[out0.length - 1] = joinLines([prev, l]);
+        if (prev != null && !endsSentence(prev) && /^\p{Ll}/u.test(l) && startsLower(l)) out0[out0.length - 1] = joinLines([prev, l]);
         else out0.push(l);
       }
       return out0;
@@ -690,7 +725,7 @@
    * Teks satu paragraf -> heading 1? {key, sub} untuk bagian yang dikenal, {unknown:true} untuk judul KAPITAL lain, null bila bukan.
    * Heading 1 = KAPITAL semua, pendek, boleh bernomor (1. / IV. / A.). "Abstract" boleh huruf biasa.
    */
-  function wholeHeading(text, map) {
+  function wholeHeading(text, map, opts) {
     let t = String(text || "").replace(/^#{1,6}\s+/, "").replace(/^\*\*(.*)\*\*$/, "$1").replace(/\s+/g, " ").trim();
     if (!t || t.length > 90 || countWords(t) > 10) return null;
     const letters = t.replace(/[^\p{L}]/gu, "");
@@ -698,6 +733,7 @@
     const n = normHead(t);
     const hit = map.get(n);
     if (hit && (caps || hit.key === "abstract")) return hit;
+    if (hit && !hit.sub && opts && opts.headingLike) return Object.assign({ weak: true }, hit); // "Method" bergaya Heading/bold (huruf kapital dari format Word)
     if (!caps) return null;
     // judul KAPITAL lain (mis. LITERATURE REVIEW): >= 2 kata, hanya huruf/spasi/&/-
     const core = t.replace(/^(?:(?:\d+\.)*\d+|[IVX]{1,5}|[A-H])[.)]?\s+/, "");
@@ -723,16 +759,19 @@
     if (useHtml) {
       const r = parseHtml(html, ParserImpl, { flattenFront: true });
       res.images = r.images || 0;
-      units = r.blocks.map((b) => ({ b, text: b.kind === "p" && !b.math ? plain(b.runs) : "" }));
+      units = r.blocks.map((b) => ({ b, text: b.kind === "p" && !b.math ? plain(b.runs) : "", headingLike: b.kind === "p" && (/^h[1-6]$/.test(b.tag || "") || b.runs.every((x) => x.b || !/\S/.test(x.text))) }));
     } else {
-      units = String(clip.text || "").replace(/\r\n?/g, "\n").split("\n").map((l) => ({ line: l, text: l }));
+      const ls = String(clip.text || "").replace(/\r\n?/g, "\n").split("\n");
+      units = ls.map((l) => ({ line: l, text: l, headingLike: true }));
     }
     // 2) potong per heading 1
     let cur = null;
     const segs = {};
     const add = (k, u) => { (segs[k] = segs[k] || []).push(u); };
     for (const u of units) {
-      const h = u.text.trim() ? wholeHeading(u.text, map) : null;
+      let h = u.text.trim() ? wholeHeading(u.text, map, { headingLike: u.headingLike }) : null;
+      // judul huruf biasa hanya diterima bila urutannya sesuai template (sesudah bagian yang sedang aktif)
+      if (h && h.weak && !(keys.indexOf(h.key) > keys.indexOf(cur) && !res.order.includes(h.key))) h = null;
       if (h && h.key) {
         cur = h.key;
         if (!res.order.includes(cur)) res.order.push(cur);
@@ -951,8 +990,13 @@
   }
 
   /** Baris persamaan (mis. "Y = β0 + β1X1 + ε" atau "… (1)"). */
+  const PLAIN_MATH = (s) => String(s).replace(/[\u{1D400}-\u{1D7FF}\u210E]/gu, (c) => c.normalize("NFKC"));
+  const EQ_WORDS = new Set(["log", "ln", "exp", "sin", "cos", "tan", "max", "min", "lim", "sup", "inf", "det", "var", "cov", "corr", "prob", "sgn", "mod", "where", "whereas", "with", "dengan", "dimana", "which"]);
   function looksLikeEquation(text) {
-    const t = text.trim();
+    const t = PLAIN_MATH(text).replace(/^[\s•▪◦·\-–]+/, "").trim();
+    // kalimat/definisi ("Yit = District-level economic growth …", "Volume Loading (VOLLOADING = …)") bukan rumus
+    const prose = (t.match(/[A-Za-z][a-z]{3,}/g) || []).filter((w) => !EQ_WORDS.has(w.toLowerCase()));
+    if (prose.length >= 2 || (prose.length === 1 && t.indexOf(prose[0]) === 0 && /^[A-Za-z][a-z]{3,}\s/.test(t))) return /^\(\d+[a-z]?\)$/.test(t);
     if (!t || countWords(t) > 30) return false;
     if (/^\(\d+[a-z]?\)$/.test(t)) return true;
     if (!/[=≤≥≈]/.test(t)) return false;
@@ -981,6 +1025,7 @@
     if (!words || words > maxW || t.length > (strongSig ? 220 : 160)) return false;
     if (/^\d+(\.\d+)*\.?$/.test(t)) return false;
     if (RE_CAPTION.test(t) || RE_NOTE.test(t)) return false;
+    if (!(block.tag && /^h[1-6]$/.test(block.tag)) && (/[=;<>≤≥]/.test(t) || /^\(.*\)$/.test(t) || /^[↓↑→←⇓⇒]+$/.test(t))) return false; // statistik / keterangan dalam kurung / panah diagram
     const letters = (t.match(/\p{L}/gu) || []).length;
     const digits = (t.match(/\d/g) || []).length;
     if (letters < 3 || digits > letters * 0.5) return false;
@@ -992,7 +1037,7 @@
     if (/\?$/.test(t) && !allBold) return false;
     if (/:$/.test(t) && !allBold) return false;
     if (RE_CITATION.test(t)) return false;
-    if (!/^[\p{Lu}\d"“'‘(\[]/u.test(t)) return false;
+    if (!/^[\p{Lu}\d"“'‘(\[]/u.test(t) && !/^[a-h][.)]\s+\p{Lu}/u.test(t)) return false; // "a. Maritime Transportation …" boleh
     if (allBold || numbered || /^(Theme|Tema|Sub-?theme|Subtema)\s+\d+\s*[:.]/i.test(t)) return true;
     // teks biasa: pendek, tanpa tanda titik akhir, huruf besar di awal
     return words <= (det.maxHeadingWords || 15);
@@ -1015,6 +1060,7 @@
     const m = /^((?:\d+\.)*\d+)\.?\s+/.exec(t);
     if (m) return m[1].split(".").length;
     if (/^[A-H][.)]\s+/.test(t)) return 2;
+    if (/^[a-h][.)]\s+/.test(t)) return 4; // a. b. c. = sub-sub-heading
     if (/^[IVX]{1,4}[.)]\s+/.test(t)) return 1;
     if (/^\d+\)\s+/.test(t)) return 3; // gaya IEEE: IV. → A. → 1)
     return 0;
@@ -1368,8 +1414,12 @@
     const mixed = runs.some((x) => x.sub || x.sup)
       ? runs.map((x) => (x.sub ? "_{" + x.text.trim() + "}" : x.sup ? "^{" + x.text.trim() + "}" : x.text)).join("").trim()
       : text;
-    const r = T.parse(mixed, { forceLinear: mixed !== text });
+    // "…+εit, whereas:" -> kata penghubung di akhir tetap ditulis sebagai teks biasa
+    const conn = /,?\s*\b(whereas|where|in which|with|dengan|di mana|dimana|yaitu)\s*:?\s*$/i.exec(mixed);
+    const core = conn ? mixed.slice(0, conn.index) : mixed;
+    const r = T.parse(core, { forceLinear: mixed !== text });
     if (r.error || !r.ast) return it;
+    if (conn) r.ast.items.push({ t: "text", v: (/^,/.test(conn[0].trim()) ? ", " : " ") + conn[1] + (/:\s*$/.test(conn[0]) ? ":" : "") });
     return Object.assign({}, it, { eq: { ast: r.ast, number: r.number } });
   }
   /**

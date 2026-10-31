@@ -93,8 +93,10 @@
    *   "…,\" di akhir baris (aslinya \\ ganti baris) -> "…,\\"
    *   "[" / "]" pembungkus rumus baris (aslinya \[ \]) -> dibuang
    */
+  /** Huruf matematika Unicode (𝑖 𝑡 𝜀 𝐗 ℎ — hasil salin rumus Word sebagai teks) -> huruf biasa. */
+  const mathAlnumToPlain = (s) => String(s).replace(/[\u{1D400}-\u{1D7FF}\u210E]/gu, (c) => c.normalize("NFKC"));
   function repairLatex(s) {
-    let t = String(s);
+    let t = mathAlnumToPlain(String(s));
     if (/^\[\s*\n[\s\S]*\n\s*\]$/.test(t)) t = t.replace(/^\[\s*\n/, "").replace(/\n\s*\]$/, "");
     else if (/^\[\s[\s\S]*\\[a-zA-Z][\s\S]*\s\]$/.test(t)) t = t.replace(/^\[\s+/, "").replace(/\s+\]$/, "");
     t = t.replace(/(^|[^\\])!(?=\\(?:left|right|big|Big|bigg|Bigg)\b)/g, "$1");
@@ -112,13 +114,17 @@
     let t = s;
     t = t.replace(/([₀-₉₊₋ₐₑᵢⱼₖₙₜₓ]+)/g, (m) => "_{" + [...m].map((c) => SUBDIG[c]).join("") + "}");
     t = t.replace(/([⁰-⁹¹²³⁺⁻ⁿⁱ]+)/g, (m) => "^{" + [...m].map((c) => SUPDIG[c]).join("") + "}");
+    t = t.replace(/×\s*10\s*([−-])\s*(\d+)(?![\d.])/g, "×10^{-$2}"); // 1.58×10−7 (superskrip hilang saat disalin)
+    // indeks data panel tanpa format subskrip: Yit, SHIPit, εit -> Y_{it}, SHIP_{it}
+    t = t.replace(/(^|[^A-Za-z\\])([A-Z]{1,15}|[α-ωΑ-Ω])(it|jt|ijt|ij|ict)(?![A-Za-z])/g, "$1$2_{$3}");
+    t = t.replace(/(^|[^\\A-Za-z{])([A-Z]{2})(?=_\{)/g, "$1\\mathrm{$2}"); // EG_{it}, DI_{it} tegak seperti SHIP_{it}
     t = t.replace(/√\s*\(([^()]*)\)/g, "\\sqrt{$1}").replace(/\bsqrt\s*\(([^()]*)\)/g, "\\sqrt{$1}").replace(/√\s*(\w+)/g, "\\sqrt{$1}");
     t = t.replace(/Σ|∑/g, "\\sum ").replace(/∏/g, "\\prod ");
     // kata/singkatan >= 3 huruf (ROA, DER, Var, log) -> tegak; fungsi dikenal -> \\log dst.
     t = t.replace(/(^|[^\\A-Za-z])([A-Z]{3,}|[a-z]{3,}|[A-Z][a-z]{2,}|ln)(?![A-Za-z])/g, (m, pre, w) => pre + (FUNCS.has(w) ? "\\" + w + " " : /^[a-z]+$/.test(w) && w.length > 3 ? "\\text{" + (pre === " " ? " " : "") + w + "}" : "\\mathrm{" + w + "}"));
     if (opts.autoSubscript !== false) { // X1 -> X_{1}; dua kali karena pola tidak tumpang-tindih (β1X1)
       // X1 -> X_{1}; X1c (variabel terpusat) -> X_{1c}
-      const re = /(^|[^A-Za-z\\{_^])([A-Za-zα-ωΑ-Ω])(\d+(?:[a-z](?![a-z{]))?)(?![\d.])/g;
+      const re = /(^|[^A-Za-z\\{_^])([A-Za-zα-ωΑ-Ω])(\d+(?:it|jt|ijt|[a-z](?![a-z{]))?)(?![\d.])/g;
       t = t.replace(re, "$1$2_{$3}").replace(re, "$1$2_{$3}");
     }
     t = t.replace(/\*/g, "\\cdot ").replace(/<=|≤/g, "\\leq ").replace(/>=|≥/g, "\\geq ").replace(/!=|≠/g, "\\neq ");
@@ -157,9 +163,12 @@
       if (c === "^" || c === "_" || c === "&") { toks.push({ k: c }); i++; continue; }
       if (/\s/.test(c)) { i++; continue; }
       if (/[0-9]/.test(c)) { const m = /^[0-9]+(?:\.[0-9]+)?/.exec(src.slice(i)); toks.push({ k: "num", v: m[0] }); i += m[0].length; continue; }
-      if (/[\p{L}]/u.test(c)) { toks.push({ k: "id", v: c }); i++; continue; }
-      if (c === "'") { toks.push({ k: "op", v: "′" }); i++; continue; }
-      toks.push({ k: "op", v: c === "-" ? "−" : c }); i++;
+      // karakter di luar BMP (mis. 𝑖 𝜀 dari rumus Word) = 2 unit UTF-16: jangan dipotong
+      const ch = String.fromCodePoint(src.codePointAt(i));
+      if (/[\p{L}]/u.test(ch)) { toks.push({ k: "id", v: ch }); i += ch.length; continue; }
+      if (ch === "'") { toks.push({ k: "op", v: "′" }); i++; continue; }
+      if (/[\p{M}]/u.test(ch) && toks.length) { toks[toks.length - 1].v += ch; i += ch.length; continue; } // tanda diakritik gabung
+      toks.push({ k: "op", v: ch === "-" ? "−" : ch }); i += ch.length;
     }
     return toks;
   }
@@ -386,9 +395,12 @@
   function ommlRun(text, o) {
     o = o || {};
     let rpr = "";
+    // skema OMML: <m:nor/> ATAU (<m:scr/>, <m:sty/>) — tidak boleh keduanya (Word menolak dengan GeneralException)
     if (o.nor) rpr += "<m:nor/>";
-    if (o.scr) rpr += `<m:scr m:val="${o.scr}"/>`;
-    if (o.sty || o.scr) rpr += `<m:sty m:val="${o.sty || "p"}"/>`;
+    else {
+      if (o.scr) rpr += `<m:scr m:val="${o.scr}"/>`;
+      if (o.sty || o.scr) rpr += `<m:sty m:val="${o.sty || "p"}"/>`;
+    }
     if (o._st && o._st.aln) { rpr += "<m:aln/>"; o._st.aln = false; }
     const w = `<w:rPr><w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math"/>${o.size ? `<w:sz w:val="${Math.round(o.size * 2)}"/><w:szCs w:val="${Math.round(o.size * 2)}"/>` : ""}</w:rPr>`;
     return `<m:r>${rpr ? `<m:rPr>${rpr}</m:rPr>` : ""}${w}<m:t xml:space="preserve">${xe(text)}</m:t></m:r>`;
@@ -405,7 +417,7 @@
       case "num": return ommlRun(node.v, o);
       case "op": return ommlRun(node.v, o);
       case "space": return node.v ? ommlRun(node.v, o) : "";
-      case "text": return ommlRun(node.v, Object.assign({}, o, { nor: true, sty: "p" }));
+      case "text": return ommlRun(node.v, Object.assign({}, o, { nor: true, sty: null, scr: null }));
       case "fn": {
         const name = ommlRun(node.v, Object.assign({}, o, { sty: "p" }));
         if (node.arg) return `<m:func><m:fName>${name}</m:fName>${E(node.arg)}</m:func>`;
@@ -786,5 +798,5 @@
     { group: "Klaster", name: "Jarak Euclidean", tex: "d\\left(x,y\\right)=\\sqrt{\\sum_{i=1}^{n}\\left(x_i-y_i\\right)^2}" },
   ];
 
-  return { toRuns, repairLatex, parse, parseLatex, normalizeInput, linearToLatex, fromMathML, toOMML, toMathML, toUnicode, toLatex, buildPackage, buildEquationParagraph, buildEquationPackage, wrapPackage, ommlFromWordHtml, ommlToAst, ommlXmlToAst, LIBRARY, looksLatex };
+  return { mathAlnumToPlain, toRuns, repairLatex, parse, parseLatex, normalizeInput, linearToLatex, fromMathML, toOMML, toMathML, toUnicode, toLatex, buildPackage, buildEquationParagraph, buildEquationPackage, wrapPackage, ommlFromWordHtml, ommlToAst, ommlXmlToAst, LIBRARY, looksLatex };
 });

@@ -361,7 +361,7 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     if (state.mode === "cursor" && todo.length > 1) { toast("Mode kursor hanya untuk satu bagian sekaligus. Pilih 'Akhir bagian'.", "err"); return; }
     setBusy(true);
     try {
-      let last = null, total = 0;
+      let last = null, total = 0, eqText = 0;
       for (const k of todo) {
         const items = pend(k).items;
         if (isAbs(k)) {
@@ -375,7 +375,7 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
           continue;
         }
         last = await WordOps.insertSection(k, items, state.profile, state.mode);
-        total += last.inserted;
+        total += last.inserted; eqText += last.eqFallback || 0;
         if (last.missingStyles && last.missingStyles.length) toast("Gaya tidak ditemukan, dipakai Normal: " + last.missingStyles.join(", "), "err");
         state.pending[k] = null;
       }
@@ -383,7 +383,8 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
       renderSections();
       const c = last.count;
       const over = c.limit && c.total > c.limit;
-      toast(`✓ ${total} blok disisipkan. Total isi ${fmtN(c.total)}${c.limit ? " / " + fmtN(c.limit) : ""} kata${over ? " — MELEBIHI BATAS" : ""}.`, over ? "err" : "ok", 6000);
+      toast(`✓ ${total} blok disisipkan. Total isi ${fmtN(c.total)}${c.limit ? " / " + fmtN(c.limit) : ""} kata${over ? " — MELEBIHI BATAS" : ""}.`
+        + (eqText ? ` ${eqText} rumus ditolak Word sebagai persamaan dan disisipkan sebagai teks — blok barisnya lalu pakai Rumus → "Ubah teks terpilih jadi rumus".` : ""), over || eqText ? "err" : "ok", eqText ? 10000 : 6000);
       if (!$("#tab-words").classList.contains("hidden")) renderCounts(c);
     } catch (e) {
       console.error(e);

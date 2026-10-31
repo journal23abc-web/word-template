@@ -106,6 +106,14 @@ Kebutuhan: Word 2016 ke atas / Microsoft 365 / Word Mac / Word web. Fitur "Hapus
 
 ## 6. Catatan versi
 
+**v10.1 (perbaikan error "GeneralException (Paragraph.insertOoxml)"):**
+- Rumus yang disalin dari persamaan Word sebagai teks (huruf matematika 𝑖 𝑡 𝜀) kini dibaca utuh; sebelumnya hurufnya terpotong sehingga Word menolak rumusnya. `SHIP𝑖𝑡`, `Yit` → SHIPᵢₜ, Yᵢₜ; `1.58×10−7` → 1.58 × 10⁻⁷.
+- Teks biasa di dalam rumus (`\text{…}`) ditulis sesuai aturan format rumus Word. Semua rumus yang dibuat add-in kini diperiksa terhadap aturan itu di uji otomatis.
+- Bila Word tetap menolak satu rumus, rumus itu disisipkan sebagai teks berformat (subskrip/superskrip) dan **sisipan lain tetap berjalan**; jumlahnya dilaporkan.
+- Baris definisi/daftar seperti "Yit = District-level economic growth …" atau "Volume Loading (VOLLOADING = …; p = …)" tidak lagi dianggap rumus atau sub-heading.
+- Tempel teks polos dari Word: tabel (sel dipisah Tab) disusun kembali jadi tabel, termasuk sel yang terpotong ganti baris; "a. Maritime …" tidak lagi tergabung dengan judul di atasnya.
+- Tempel keseluruhan: judul bagian yang diketik huruf biasa tetapi tampil KAPITAL karena format Word (gaya Heading / All Caps) juga dikenali.
+
 **v10:**
 - Menu baru **Tempel keseluruhan** (paling atas): satu kali tempel untuk seluruh artikel, dipecah otomatis per Heading 1 sesuai daftar bagian template jurnal. Menu tempel lama berganti nama menjadi **Tempel bagian**.
 - Teks polos yang tiap paragrafnya satu baris panjang tidak lagi tersambung menjadi satu paragraf.
