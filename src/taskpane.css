@@ -225,3 +225,16 @@ body { overflow: hidden; }
 .chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .prow.t-equation .txt math { font-size: 13px; }
 code { font: 11.5px Consolas, Menlo, monospace; background: var(--bg); padding: 0 3px; border-radius: 3px; }
+
+/* ---------- tempel keseluruhan ---------- */
+.whole-drop { min-height: 110px; font-size: 12.5px; }
+.wlist { list-style: none; margin: 10px 0 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.wr { display: flex; justify-content: space-between; gap: 8px; padding: 7px 10px; border-top: 1px solid var(--line); font-size: 12px; align-items: baseline; }
+.wr:first-child { border-top: 0; }
+.wr .wt { font-weight: 600; letter-spacing: .01em; flex: 1 1 auto; min-width: 0; }
+.wr .wn { color: var(--muted); text-align: right; font-size: 11.5px; flex: 0 1 50%; }
+.wr.ok .wt::before { content: "✓ "; color: var(--ok); }
+.wr.miss .wt { color: var(--muted); font-weight: 500; }
+.wnotes { margin-top: 8px; font-size: 11.5px; color: var(--muted); }
+.wnotes p { margin: 3px 0; }
+.rail .tab span.long { font-size: 9.5px; letter-spacing: -.01em; word-break: break-word; }

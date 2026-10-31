@@ -464,7 +464,10 @@
             }
           }
         }
-        if (opts.flattenTables || allCells.length <= 1) {
+        // tabel halaman depan (ARTICLE INFO | ABSTRACT …) saat tempel keseluruhan: isinya dijadikan paragraf
+        const isAbsHead = (x) => /^\s*(abstract|abstrak)\s*$/i.test((x.textContent || "").replace(WS, " "));
+        const front = opts.flattenFront && allCells.some((td) => isAbsHead(td) || Array.from(td.querySelectorAll("p,div,h1,h2,h3,h4,b,strong")).some(isAbsHead));
+        if (opts.flattenTables || allCells.length <= 1 || front) {
           for (const td of allCells) { for (const c of td.childNodes) walk(c, fmt, "p", ""); flush(); }
           return;
         }
@@ -568,6 +571,8 @@
       paras = paras.map((ls) => {
         // jangan sambung bila baris pertama heading markdown
         if (ls.length > 1 && /^#{1,6}\s/.test(ls[0])) return [ls[0], ls.slice(1).join(" ")];
+        // baris panjang (salinan Word/web, satu baris = satu paragraf) tidak disambung; baris pendek seragam (PDF) disambung
+        if (merge && ls.length > 1 && ls.filter((l) => l.length > 160).length >= Math.max(1, ls.length * 0.25)) return mergeLines(ls);
         return [joinLines(ls)];
       }).flat();
     } else {
@@ -649,6 +654,128 @@
     }
     const r = parseText(clip.text || "", { mergeBrokenLines: profile.detect.mergeBrokenLines && !isRef });
     return isRef ? r : recoverFlatTables(recoverLatex(r));
+  }
+
+  /* ---------------- Tempel keseluruhan: pecah artikel per Heading 1 ---------------- */
+  // nama lain judul bagian (KAPITAL) yang umum di naskah, dipetakan ke kunci bagian template
+  const WHOLE_SYNONYMS = [
+    ["abstract", ["ABSTRACT", "ABSTRAK"]],
+    ["intro", ["INTRODUCTION", "PENDAHULUAN", "BACKGROUND", "INTRODUCTION AND BACKGROUND"]],
+    ["method", ["METHOD", "METHODS", "METHODOLOGY", "RESEARCH METHOD", "RESEARCH METHODS", "RESEARCH METHODOLOGY", "MATERIALS AND METHODS", "MATERIAL AND METHODS", "METODE", "METODE PENELITIAN", "METODOLOGI", "METODOLOGI PENELITIAN"]],
+    ["rd", ["RESULTS AND DISCUSSION", "RESULTS AND DISCUSSIONS", "RESULT AND DISCUSSION", "FINDINGS AND DISCUSSION", "RESULTS & DISCUSSION", "HASIL DAN PEMBAHASAN", "HASIL PENELITIAN DAN PEMBAHASAN"]],
+    ["rd:Results", ["RESULTS", "RESULT", "FINDINGS", "HASIL", "HASIL PENELITIAN"]],
+    ["rd:Discussion", ["DISCUSSION", "DISCUSSIONS", "PEMBAHASAN"]],
+    ["concl", ["CONCLUSION", "CONCLUSIONS", "CONCLUSION AND SUGGESTION", "CONCLUSIONS AND SUGGESTION", "CONCLUSIONS AND SUGGESTIONS", "CONCLUSION AND RECOMMENDATION", "CONCLUSION AND RECOMMENDATIONS", "CONCLUSIONS AND RECOMMENDATIONS", "KESIMPULAN", "SIMPULAN", "KESIMPULAN DAN SARAN", "PENUTUP"]],
+    ["ack", ["ACKNOWLEDGMENT", "ACKNOWLEDGMENTS", "ACKNOWLEDGEMENT", "ACKNOWLEDGEMENTS", "AKNOWLEDGMENT", "UCAPAN TERIMA KASIH"]],
+    ["contrib", ["AUTHOR CONTRIBUTION STATEMENT", "AUTHOR CONTRIBUTIONS", "AUTHOR CONTRIBUTION", "AUTHORS CONTRIBUTIONS", "AUTHORS' CONTRIBUTIONS", "CREDIT AUTHORSHIP CONTRIBUTION STATEMENT", "KONTRIBUSI PENULIS"]],
+    ["ai", ["AI DISCLOSURE STATEMENT", "AI DISCLOSURE", "DECLARATION OF AI USE", "DECLARATION OF GENERATIVE AI USE", "DECLARATION OF GENERATIVE AI AND AI-ASSISTED TECHNOLOGIES IN THE WRITING PROCESS"]],
+    ["refs", ["REFERENCES", "REFERENCE", "BIBLIOGRAPHY", "DAFTAR PUSTAKA", "REFERENSI", "LITERATURE CITED", "WORKS CITED"]],
+  ];
+  // bagian penutup yang tidak ada di template -> dilewati (bukan ditempel ke bagian sebelumnya)
+  const RE_BACKMATTER = /^(CONFLICTS? OF INTERESTS?|COMPETING INTERESTS?|DECLARATION OF COMPETING INTERESTS?|DECLARATIONS?|FUNDING( STATEMENT| INFORMATION)?|DATA AVAILABILITY( STATEMENT)?|ETHICS?( STATEMENT| APPROVAL)?|ETHICAL (APPROVAL|STATEMENT|CONSIDERATIONS?)|APPENDIX( [A-Z0-9]+)?|APPENDICES|ABBREVIATIONS|SUPPLEMENTARY MATERIALS?|BIOGRAPH(Y|IES)|ABOUT THE AUTHORS?|AUTHOR BIOGRAPHIES|ACKNOWLEDG?E?MENTS?|AKNOWLEDGMENT|UCAPAN TERIMA KASIH|LAMPIRAN|KONFLIK KEPENTINGAN|PENDANAAN|INFORMED CONSENT|NOTES?)$/;
+  /** Peta judul (normHead) -> {key, sub?} untuk profil ini. */
+  function wholeHeadingMap(profile) {
+    const map = new Map();
+    const has = (k) => profile.sections.some((s) => s.key === k);
+    for (const [k0, names] of WHOLE_SYNONYMS) {
+      const [k, sub] = k0.split(":");
+      if (!has(k)) continue;
+      for (const n of names) if (!map.has(normHead(n))) map.set(normHead(n), { key: k, sub: sub || null });
+    }
+    // judul & nama lain dari template (termasuk bagian buatan pengguna) — prioritas tertinggi
+    for (const s of profile.sections) for (const n of sectionNames(s)) map.set(n, { key: s.key, sub: null });
+    return map;
+  }
+  /**
+   * Teks satu paragraf -> heading 1? {key, sub} untuk bagian yang dikenal, {unknown:true} untuk judul KAPITAL lain, null bila bukan.
+   * Heading 1 = KAPITAL semua, pendek, boleh bernomor (1. / IV. / A.). "Abstract" boleh huruf biasa.
+   */
+  function wholeHeading(text, map) {
+    let t = String(text || "").replace(/^#{1,6}\s+/, "").replace(/^\*\*(.*)\*\*$/, "$1").replace(/\s+/g, " ").trim();
+    if (!t || t.length > 90 || countWords(t) > 10) return null;
+    const letters = t.replace(/[^\p{L}]/gu, "");
+    const caps = letters.length >= 3 && letters === letters.toUpperCase() && letters !== letters.toLowerCase();
+    const n = normHead(t);
+    const hit = map.get(n);
+    if (hit && (caps || hit.key === "abstract")) return hit;
+    if (!caps) return null;
+    // judul KAPITAL lain (mis. LITERATURE REVIEW): >= 2 kata, hanya huruf/spasi/&/-
+    const core = t.replace(/^(?:(?:\d+\.)*\d+|[IVX]{1,5}|[A-H])[.)]?\s+/, "");
+    if (RE_BACKMATTER.test(core)) return { unknown: true, back: true, title: core };
+    if (/^[\p{Lu}][\p{Lu}'’&\- ]+$/u.test(core) && core.split(/\s+/).filter((w) => /\p{L}{2,}/u.test(w)).length >= 2) return { unknown: true, title: core };
+    return null;
+  }
+  /**
+   * Pecah satu tempelan artikel utuh menjadi bagian-bagian template.
+   * return { parts: {key: {blocks, images, tables}}, order: [key], unknown: [{title, key|null}], front: n, notFound: [key] }
+   */
+  function splitWhole(clip, profile, ParserImpl) {
+    profile = profile || DEFAULT_PROFILE;
+    const map = wholeHeadingMap(profile);
+    const keys = profile.sections.map((s) => s.key);
+    const conclIdx = keys.indexOf("concl");
+    const isMain = (k) => k && profile.sections.find((s) => s.key === k).kind !== "abstract" && profile.sections.find((s) => s.key === k).kind !== "references" && (conclIdx < 0 || keys.indexOf(k) < conclIdx);
+    const res = { parts: {}, order: [], unknown: [], front: 0, images: 0 };
+    const html = clip.html || "";
+    const useHtml = html && (/<(p|div|h[1-6]|li|br|table|tr)\b/i.test(html) || /msEquation|katex/i.test(html));
+    // 1) satuan: blok HTML atau baris teks
+    let units;
+    if (useHtml) {
+      const r = parseHtml(html, ParserImpl, { flattenFront: true });
+      res.images = r.images || 0;
+      units = r.blocks.map((b) => ({ b, text: b.kind === "p" && !b.math ? plain(b.runs) : "" }));
+    } else {
+      units = String(clip.text || "").replace(/\r\n?/g, "\n").split("\n").map((l) => ({ line: l, text: l }));
+    }
+    // 2) potong per heading 1
+    let cur = null;
+    const segs = {};
+    const add = (k, u) => { (segs[k] = segs[k] || []).push(u); };
+    for (const u of units) {
+      const h = u.text.trim() ? wholeHeading(u.text, map) : null;
+      if (h && h.key) {
+        cur = h.key;
+        if (!res.order.includes(cur)) res.order.push(cur);
+        if (h.sub) { // RESULTS / DISCUSSION terpisah -> sub-heading utama di bagian Results and Discussion
+          const t = titleCase(h.sub.toLowerCase());
+          add(cur, useHtml ? { b: { kind: "p", tag: "h2", cls: "", runs: [{ text: t, b: true, i: false, sup: false, sub: false, link: "" }], html: true } } : { line: t });
+        }
+        continue;
+      }
+      if (h && h.back && cur) { res.unknown.push({ title: h.title, key: null }); cur = "__skip"; continue; }
+      if (h && h.unknown && isMain(cur)) {
+        res.unknown.push({ title: h.title, key: cur });
+        const t = h.title;
+        add(cur, useHtml ? { b: { kind: "p", tag: "h2", cls: "", runs: [{ text: t, b: true, i: false, sup: false, sub: false, link: "" }], html: true } } : { line: t });
+        continue;
+      }
+      if (h && h.unknown && cur && !isMain(cur) && cur !== "abstract") { res.unknown.push({ title: h.title, key: null }); cur = "__skip"; continue; }
+      if (!cur) { if (u.text.trim() || u.b) res.front++; continue; }
+      if (cur === "__skip") continue;
+      add(cur, u);
+    }
+    // 3) tiap bagian diproses seperti tempel per bagian
+    for (const k of Object.keys(segs)) {
+      const sec = profile.sections.find((s) => s.key === k);
+      let r;
+      if (useHtml) {
+        const blocks = segs[k].map((u) => u.b);
+        r = { blocks, images: 0, tables: blocks.filter((b) => b.kind === "table").length, source: "html" };
+        if (sec.kind !== "references") r = recoverFlatTables(recoverLatex(r));
+      } else {
+        r = parseInput({ text: segs[k].map((u) => u.line).join("\n") }, sec, profile);
+      }
+      r.blocks = r.blocks.filter((b) => b.kind === "table" || b.math || plain(b.runs).trim());
+      if (sec.kind === "abstract") { // nama penulis/afiliasi yang terletak setelah kotak abstrak
+        let last = -1;
+        r.blocks.forEach((b, i) => { if (b.kind === "p" && countWords(plain(b.runs)) >= 25) last = i; });
+        if (last >= 0 && r.blocks.slice(last + 1).every((b) => b.kind === "p" && countWords(plain(b.runs)) <= 12)) r.blocks = r.blocks.slice(0, last + 1);
+      }
+      if (r.blocks.length) res.parts[k] = r;
+    }
+    res.order = res.order.filter((k) => res.parts[k]);
+    res.notFound = keys.filter((k) => !res.parts[k]);
+    return res;
   }
 
   /* ---------------- tabel yang tersalin sebagai baris-baris teks ---------------- */
@@ -1612,7 +1739,7 @@
   return {
     classifyAbstract, abstractParagraphs, pickAbstractTarget, abstractTargetsInCell, isAbstractNoise, RE_ABSTRACT_HEAD,
     DEFAULT_PROFILE, PRESETS, presetFor, mergeProfile, clone,
-    parseInput, parseHtml, parseText, classify, classifyReferences, classifyExisting,
+    parseInput, parseHtml, splitWhole, wholeHeading, wholeHeadingMap, parseText, classify, classifyReferences, classifyExisting,
     ieeeAutoItalic, paraFormat, finalRuns, prepareItems, prepareEquation, equationOptions, findDisplayLatex, inlineMathSpans, isLostLatex, runsFromOoxml, ooxmlKinds, cleanAttribution, looksLikeEquation, looksLikeAttribution, countWords, plain, normalizeRuns, titleCase, apaAutoItalic, linkUrls,
     findSectionHeadings, sectionRange, pickAnchor, planNewSection, countDocument, normHead,
     CM,

@@ -2,6 +2,7 @@
 
 Tempel isi artikel per bagian (Introduction, Method, Results and Discussion, Conclusion, References, …), lalu add-in menyesuaikan formatnya dengan template jurnal secara otomatis:
 
+- **Tempel keseluruhan**: salin seluruh naskah sekali (Ctrl+A, Ctrl+C), tempel sekali, dan isinya otomatis dipecah ke ABSTRACT, INTRODUCTION, METHOD, … REFERENCES menurut judul bagian (Heading 1, huruf KAPITAL; boleh bernomor seperti "1. INTRODUCTION" atau "IV. METHOD"). Judul, penulis, dan afiliasi di awal naskah dilewati; tabel halaman depan (Article info | Abstract) dibaca; RESULTS dan DISCUSSION yang terpisah digabung ke RESULTS AND DISCUSSION sebagai sub-heading; judul KAPITAL lain di badan artikel (mis. LITERATURE REVIEW) dijadikan sub-heading, sedangkan bagian penutup yang tidak ada di template (Conflict of Interest, Funding, Appendix, …) dilewati. Hasilnya bisa diperiksa dan diubah di **Tempel bagian** sebelum disisipkan
 - **Font, ukuran, perataan, spasi sebelum/sesudah, spasi baris** untuk tiap jenis paragraf
 - **Deteksi sub-heading otomatis** (kalimat pendek tanpa titik, teks bold, heading dari Google Docs/ChatGPT, heading bernomor seperti `2.1`) → dibuat bold sesuai template. Di Results and Discussion, *Results* dan *Discussion* jadi tingkat 2, sub-judul di bawahnya tingkat 3
 - **Referensi**: hanging indent sesuai template, gaya **APA** atau **IEEE bernomor** ([1] …). Italic otomatis (APA: nama jurnal + volume / judul buku; IEEE: nama jurnal / judul buku) bila tempelan tidak membawa italic, DOI jadi hyperlink (APA) atau dibiarkan "doi: …" (IEEE), baris terputus dari PDF disambung
@@ -71,7 +72,8 @@ Setelah terpasang, tombol **Template Paste** muncul di tab **Home**.
 
 1. Buka naskah template jurnal (yang sudah ada judul INTRODUCTION, METHOD, dst., atau masih kosong pun bisa).
 2. Klik **Template Paste** di tab Home, lalu pilih jurnalnya di menu **Jurnal**.
-3. Di tab **Tempel**, buka kartu bagian (misalnya *INTRODUCTION*), klik kotak bergaris putus-putus, lalu tekan **Ctrl+V**. Anda bisa menempel berkali-kali untuk menambah isi.
+3. **Cara cepat**: di menu **Tempel keseluruhan**, klik kotak bergaris putus-putus lalu tekan **Ctrl+V** dengan seluruh naskah. Periksa ringkasan per bagian, lalu klik **Sisipkan semua ke dokumen** (atau **Periksa di Tempel bagian** untuk mengubah hasil deteksi lebih dulu). Isi selalu ditambahkan di akhir tiap bagian, jadi kosongkan dulu isi lama dengan **Hapus isi semua bagian…** bila dokumen sudah berisi naskah.
+   **Per bagian**: di menu **Tempel bagian**, buka kartu bagian (misalnya *INTRODUCTION*), klik kotak bergaris putus-putus, lalu tekan **Ctrl+V**. Anda bisa menempel berkali-kali untuk menambah isi.
 4. Periksa pratinjau. Tiap baris punya menu jenis (*Isi / Heading 2 / Heading 3 / Kutipan / Caption / Catatan / Referensi / Lewati*). Ubah bila deteksi keliru.
 5. Klik **Sisipkan ke dokumen**, atau **Sisipkan semua bagian** di bawah untuk memasukkan semua sekaligus.
 6. Bila hasilnya tidak sesuai, klik **Hapus sisipan terakhir** (atau Ctrl+Z).
@@ -103,6 +105,10 @@ tests/                uji otomatis (Playwright)
 Kebutuhan: Word 2016 ke atas / Microsoft 365 / Word Mac / Word web. Fitur "Hapus sisipan terakhir" butuh WordApi 1.4 (Microsoft 365 / Word 2021).
 
 ## 6. Catatan versi
+
+**v10:**
+- Menu baru **Tempel keseluruhan** (paling atas): satu kali tempel untuk seluruh artikel, dipecah otomatis per Heading 1 sesuai daftar bagian template jurnal. Menu tempel lama berganti nama menjadi **Tempel bagian**.
+- Teks polos yang tiap paragrafnya satu baris panjang tidak lagi tersambung menjadi satu paragraf.
 
 **v9.1 (rumus):**
 - Rumus dari ChatGPT yang **backslash-nya hilang** saat disalin (rumus diapit `[` … `]` di baris sendiri, `(x_i)` di dalam kalimat, `\sigma!\left(`, `{0,1}`) kini dikenali, baik ditempel sebagai teks polos maupun dari Word (satu baris per paragraf). Rumus baris menjadi persamaan Word bernomor (dari `\tag{1}`), rumus dalam kalimat menjadi huruf miring dengan subskrip/superskrip asli.

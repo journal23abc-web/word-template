@@ -6,7 +6,7 @@
   <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
   <title>Template Paste</title>
   <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
-  <link rel="stylesheet" href="taskpane.css?v=9.2" />
+  <link rel="stylesheet" href="taskpane.css?v=10" />
 </head>
 <body>
 <div class="app">
@@ -23,8 +23,24 @@
 
   <div id="notInWord" class="banner hidden">Mode pratinjau di browser — buka lewat Word untuk menyisipkan ke dokumen.</div>
 
-  <!-- ============ TEMPEL ============ -->
-  <main id="tab-paste" class="panel">
+  <!-- ============ TEMPEL KESELURUHAN ============ -->
+  <main id="tab-whole" class="panel">
+    <div class="journalbar">
+      <label for="journalSelectWhole">Jurnal</label>
+      <select id="journalSelectWhole"></select>
+    </div>
+    <p class="hint">Salin seluruh naskah sekali saja (Ctrl+A, Ctrl+C), lalu tempel di sini. Isi dipecah otomatis menurut judul bagian (Heading 1, huruf KAPITAL) dan disiapkan ke tiap bagian.</p>
+    <div class="drop whole-drop" id="wholeDrop" contenteditable="true" spellcheck="false">Klik di sini lalu tekan Ctrl+V (⌘V) untuk menempel seluruh artikel</div>
+    <div id="wholeResult"></div>
+    <div class="footer-actions" id="wholeActions" hidden>
+      <button class="btn primary" id="wholeInsert">Sisipkan semua ke dokumen</button>
+      <button class="btn ghost" id="wholeReview" title="Lihat dan ubah hasil deteksi tiap bagian">Periksa di Tempel bagian</button>
+      <button class="btn ghost" id="wholeClear">Kosongkan tempelan</button>
+    </div>
+  </main>
+
+  <!-- ============ TEMPEL BAGIAN ============ -->
+  <main id="tab-paste" class="panel hidden">
     <div class="journalbar">
       <label for="journalSelect">Jurnal</label>
       <select id="journalSelect"></select>
@@ -138,9 +154,13 @@
 
   <!-- ============ MENU KANAN (gaya Paperpal) ============ -->
   <nav class="rail" role="tablist" aria-label="Menu Template Paste">
-    <button role="tab" class="tab active" data-tab="paste" data-title="Tempel" title="Tempel isi artikel">
+    <button role="tab" class="tab active" data-tab="whole" data-title="Tempel keseluruhan" title="Tempel seluruh artikel sekaligus">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="13" height="16" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7 7.5h7M7 10.5h7M7 13.5h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M19.5 7v13.5H8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="long">Tempel keseluruhan</span>
+    </button>
+    <button role="tab" class="tab" data-tab="paste" data-title="Tempel bagian" title="Tempel isi artikel per bagian">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6v3H9z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 5.5H6.5A1.5 1.5 0 0 0 5 7v12.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V7a1.5 1.5 0 0 0-1.5-1.5H15" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8.5 11h7M8.5 14h7M8.5 17h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-      <span>Tempel</span>
+      <span>Tempel bagian</span>
     </button>
     <button role="tab" class="tab" data-tab="words" data-title="Hitung kata" title="Hitung kata & batas jurnal">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V9M10 19V5M15 19v-7M20 19v-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M3 21h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
@@ -182,10 +202,10 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="math.js?v=9.2"></script>
-  <script src="engine.js?v=9.2"></script>
-  <script src="check.js?v=9.2"></script>
-  <script src="word-ops.js?v=9.2"></script>
-  <script src="taskpane.js?v=9.2"></script>
+  <script src="math.js?v=10"></script>
+  <script src="engine.js?v=10"></script>
+  <script src="check.js?v=10"></script>
+  <script src="word-ops.js?v=10"></script>
+  <script src="taskpane.js?v=10"></script>
 </body>
 </html>

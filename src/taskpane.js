@@ -92,7 +92,7 @@
     document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
       document.querySelectorAll(".tab").forEach((x) => { x.classList.toggle("active", x === b); x.setAttribute("aria-selected", x === b ? "true" : "false"); });
       $("#content").scrollTop = 0;
-      ["paste", "words", "check", "math", "template"].forEach((k) => $("#tab-" + k).classList.toggle("hidden", k !== b.dataset.tab));
+      ["whole", "paste", "words", "check", "math", "template"].forEach((k) => $("#tab-" + k).classList.toggle("hidden", k !== b.dataset.tab));
       if (b.dataset.tab === "words") recount();
       if (b.dataset.tab === "check") renderCheckSettings();
     }));
@@ -277,6 +277,80 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     renderSections();
     const d = document.querySelector(`.drop[data-key="${CSS.escape(key)}"]`);
     if (d) { d.classList.add("flash"); d.textContent = `✓ ${parsed.blocks.length} blok ditambahkan — tempel lagi untuk menambah`; setTimeout(() => d.classList.remove("flash"), 1500); }
+  }
+
+  /* ---------------- Tempel keseluruhan ---------------- */
+  function onWholePaste(ev) {
+    ev.preventDefault();
+    const cd = ev.clipboardData || window.clipboardData;
+    const clip = { html: cd.getData("text/html") || "", text: cd.getData("text/plain") || cd.getData("Text") || "" };
+    if (!clip.html && !clip.text.trim()) { toast("Clipboard kosong.", "err"); return; }
+    splitWholeNow(clip, false);
+  }
+  function splitWholeNow(clip, quiet) {
+    const r = E.splitWhole(clip, state.profile);
+    if (!r.order.length) {
+      state.whole = null; renderWhole();
+      if (!quiet) toast("Judul bagian (INTRODUCTION, METHOD, …) tidak ditemukan. Pastikan judul bagian ditulis KAPITAL seperti di template.", "err", 8000);
+      return;
+    }
+    state.wholeClip = clip;
+    // seluruh tempelan bagian sebelumnya diganti dengan hasil pecahan ini
+    state.profile.sections.forEach((x) => { state.pending[x.key] = null; });
+    r.order.forEach((k) => { const p = pend(k); p.blocks = r.parts[k].blocks; p.images = 0; reclassify(k); });
+    state.whole = r;
+    renderWhole(); renderSections();
+    const d = $("#wholeDrop");
+    if (!quiet && d) { d.classList.add("flash"); d.textContent = `✓ Dipecah ke ${r.order.length} bagian — tempel lagi untuk mengganti`; setTimeout(() => d.classList.remove("flash"), 1500); }
+  }
+  function renderWhole() {
+    const host = $("#wholeResult"), r = state.whole;
+    $("#wholeActions").hidden = !r;
+    if (!r) { host.innerHTML = ""; return; }
+    const rows = state.profile.sections.map((s) => {
+      const p = state.pending[s.key];
+      if (!p || !p.items.length) return `<li class="wr miss"><span class="wt">${esc(s.title)}</span><span class="wn">tidak ada di tempelan</span></li>`;
+      const its = p.items.filter((i) => i.type !== "skip"), c = (t) => its.filter((i) => i.type === t).length;
+      const bits = [];
+      if (s.kind === "references") bits.push(c("ref") + " referensi");
+      else if (s.kind === "abstract") bits.push(fmtN(itemWords(its)) + " kata");
+      else {
+        bits.push(its.length + " blok", fmtN(itemWords(its)) + " kata");
+        if (c("heading")) bits.push(c("heading") + " sub-heading");
+        if (c("table")) bits.push(c("table") + " tabel");
+        if (c("equation")) bits.push(c("equation") + " rumus");
+      }
+      return `<li class="wr ok"><span class="wt">${esc(s.title)}</span><span class="wn">${bits.join(" · ")}</span></li>`;
+    }).join("");
+    const notes = [];
+    if (r.front) notes.push(`${r.front} baris sebelum judul bagian pertama (judul artikel, penulis, afiliasi) dilewati.`);
+    r.unknown.forEach((u) => {
+      const sec = u.key && state.profile.sections.find((x) => x.key === u.key);
+      notes.push(sec ? `Judul "${u.title}" tidak ada di template → dijadikan sub-heading di ${sec.title}.` : `Judul "${u.title}" tidak ada di template → isinya dilewati.`);
+    });
+    if (r.images) notes.push(`${r.images} gambar diabaikan — sisipkan gambar langsung di Word.`);
+    host.innerHTML = `<ul class="wlist">${rows}</ul>` + (notes.length ? `<div class="wnotes">${notes.map((n) => `<p>${esc(n)}</p>`).join("")}</div>` : "");
+  }
+  async function wholeInsert() {
+    if (!state.whole) return;
+    const prev = state.mode;
+    state.mode = "section"; // tempel keseluruhan selalu di akhir tiap bagian
+    try { await doInsert(state.profile.sections.map((s) => s.key)); } finally { state.mode = prev; }
+    renderWhole();
+  }
+  function initWhole() {
+    const d = $("#wholeDrop");
+    d.addEventListener("paste", onWholePaste);
+    d.addEventListener("keydown", (ev) => { if (!(ev.ctrlKey || ev.metaKey) && ev.key.length === 1) ev.preventDefault(); });
+    d.addEventListener("drop", (ev) => ev.preventDefault());
+    $("#wholeInsert").addEventListener("click", wholeInsert);
+    $("#wholeReview").addEventListener("click", () => document.querySelector('.tab[data-tab="paste"]').click());
+    $("#wholeClear").addEventListener("click", () => {
+      state.profile.sections.forEach((x) => { state.pending[x.key] = null; });
+      state.whole = null; state.wholeClip = null;
+      $("#wholeDrop").textContent = "Klik di sini lalu tekan Ctrl+V (⌘V) untuk menempel seluruh artikel";
+      renderWhole(); renderSections();
+    });
   }
 
   /* ---------------- aksi Word ---------------- */
@@ -627,6 +701,7 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     const opts = Object.keys(state.store.profiles).map((n) => `<option ${n === state.store.active ? "selected" : ""}>${esc(n)}</option>`).join("");
     sel.innerHTML = opts;
     $("#journalSelect").innerHTML = opts;
+    $("#journalSelectWhole").innerHTML = opts;
     const form = $("#templateForm");
     form.innerHTML = "";
     GROUPS.forEach((g, gi) => {
@@ -749,10 +824,12 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
       // isi yang sudah ditempel tetap ada, diklasifikasi ulang dengan aturan jurnal baru
       Object.keys(state.pending).forEach((k) => { if (state.pending[k]) { if (sec(k)) reclassify(k); else state.pending[k] = null; } });
       renderSections(); renderLimits(); refreshScan().then(renderSections);
+      if (state.wholeClip) splitWholeNow(state.wholeClip, true); // tempelan keseluruhan dipecah ulang dengan judul bagian jurnal baru
       toast("Template aktif: " + name.split(" (")[0]);
     };
     $("#profileSelect").addEventListener("change", (e) => switchProfile(e.target.value));
     $("#journalSelect").addEventListener("change", (e) => switchProfile(e.target.value));
+    $("#journalSelectWhole").addEventListener("change", (e) => switchProfile(e.target.value));
     $("#profDup").addEventListener("click", () => {
       let n = state.store.active + " (salinan)", k = 2;
       while (state.store.profiles[n]) n = state.store.active + " (salinan " + k++ + ")";
@@ -972,7 +1049,7 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     $("#profileLabel").textContent = state.store.active;
     $("#notInWord").classList.toggle("hidden", inWord);
     state.open[state.profile.sections[0] && state.profile.sections[0].key] = true;
-    initTabs(); initMode(); initProfiles(); initMath();
+    initTabs(); initMode(); initProfiles(); initMath(); initWhole();
     renderTemplate(); renderSections(); renderLimits(); renderCounts(null);
     $("#insertAll").addEventListener("click", () => doInsert(state.profile.sections.map((s) => s.key)));
     $("#undoLast").addEventListener("click", doUndo);
