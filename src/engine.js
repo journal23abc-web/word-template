@@ -1261,6 +1261,75 @@
     return out;
   }
 
+  /* ---------------- referensi ganda ---------------- */
+  const refNum = (t) => { const m = /^\s*\[(\d+)\]/.exec(t) || /^\s*(\d+)\.\s/.exec(t); return m ? +m[1] : null; };
+  const refDoi = (t) => { const m = /\b(10\.\d{4,9}\/[^\s"<>]+?)[.,;)\]]*(?:\s|$)/i.exec(t + " "); return m ? m[1].toLowerCase() : null; };
+  const refBody = (t) => String(t).replace(/^\s*(?:\[\d+\]|\d+\.)\s*/, "");
+  const refNorm = (t) => refBody(t).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/https?:\/\/(dx\.)?doi\.org\//g, "doi ").replace(/\bdoi:\s*/g, "doi ").replace(/[^a-z0-9]+/g, "");
+  const refYear = (t) => { const m = /\((\d{4}[a-z]?)\)|\b(?:19|20)\d{2}[a-z]?\b/.exec(refBody(t)); return m ? m[1] || m[0] : null; }; // 2020a ≠ 2020b
+  const refAuthor = (t) => { const b = refBody(t).normalize("NFD").replace(/[̀-ͯ]/g, ""); const m = /^(?:[A-Z]\.\s*(?:[A-Z]\.\s*)*)?([A-Za-z'’\-]+)/.exec(b); return m ? m[1].toLowerCase() : ""; };
+  const STOP_REF = new Set(["the", "and", "for", "with", "from", "doi", "https", "org", "vol", "pp"]);
+  const refTokens = (t) => new Set((refBody(t).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").match(/[a-z]{3,}/g) || []).filter((w) => !STOP_REF.has(w)));
+  const jaccard = (a, b) => { let n = 0; a.forEach((x) => { if (b.has(x)) n++; }); return n / Math.max(1, a.size + b.size - n); };
+  /**
+   * Cari referensi ganda. texts = teks tiap paragraf referensi (urut).
+   * Ganda bila: teks sama (tanpa nomor/format), DOI sama, atau penulis pertama + tahun sama dan isi >= 85% mirip.
+   * Yang dipertahankan: yang lebih lengkap (ber-DOI / lebih panjang) — kecuali gaya bernomor: selalu yang pertama.
+   * return { remove: [i], keep: {i: j}, numbered }
+   */
+  function findDuplicateRefs(texts) {
+    const n = texts.length;
+    const filled = texts.filter((t) => String(t).trim());
+    const numbered = filled.length > 0 && filled.every((t) => refNum(t) != null);
+    const info = texts.map((t) => ({ t: String(t), norm: refNorm(t), doi: refDoi(t), year: refYear(t), author: refAuthor(t), tok: refTokens(t) }));
+    const remove = new Set(), keep = {};
+    for (let i = 0; i < n; i++) {
+      if (remove.has(i) || info[i].norm.length < 20) continue;
+      for (let j = i + 1; j < n; j++) {
+        if (remove.has(j) || info[j].norm.length < 20) continue;
+        const a = info[i], b = info[j];
+        const same = a.norm === b.norm || (a.doi && a.doi === b.doi) ||
+          (a.year && a.year === b.year && a.author && a.author === b.author && jaccard(a.tok, b.tok) >= 0.85);
+        if (!same) continue;
+        let k = i, r = j;
+        if (!numbered) { const score = (x) => (x.doi ? 1000 : 0) + x.t.length; if (score(b) > score(a)) { k = j; r = i; } }
+        remove.add(r); keep[r] = k;
+        if (r === i) break;
+      }
+    }
+    Object.keys(keep).forEach((r) => { let k = keep[r]; while (keep[k] != null) k = keep[k]; keep[r] = k; });
+    return { remove: [...remove].sort((a, b) => a - b), keep, numbered };
+  }
+  /** Peta nomor lama -> nomor baru (IEEE) setelah referensi ganda dihapus. removed: {nomorLama: nomorLamaYangDipertahankan} */
+  function renumberMap(oldNums, removed) {
+    const map = new Map();
+    oldNums.forEach((o, i) => map.set(o, i + 1));
+    Object.keys(removed).forEach((o) => map.set(+o, map.get(removed[o])));
+    return map;
+  }
+  // satu kelompok sitasi bernomor: [12] · [3, 12] · [3–5] · [3]–[5] · [1], [3], [7]
+  const RE_CITE_GROUP = /\[\s*\d+(?:\s*[,–\-]\s*\d+)*\s*\](?:\s*(?:[–\-]|,)\s*\[\s*\d+(?:\s*[,–\-]\s*\d+)*\s*\])*/g;
+  /** Tulis ulang satu kelompok sitasi memakai peta nomor baru (nomor ganda digabung, urut, rentang dipertahankan). */
+  function renumberCitation(str, map) {
+    const nums = [];
+    const pushRange = (a, b) => { for (let x = a; x <= b && x - a < 300; x++) nums.push(x); };
+    const brackets = str.match(/\[[^\]]*\]/g) || [];
+    const seps = str.split(/\[[^\]]*\]/).slice(1, -1).map((x) => x.trim());
+    brackets.forEach((br, k) => {
+      if (k > 0 && /^[–\-]$/.test(seps[k - 1]) && nums.length) { const prev = nums[nums.length - 1]; const m = /\d+/.exec(br); nums.pop(); pushRange(prev, +m[0]); return; }
+      br.replace(/[\[\]\s]/g, "").split(",").forEach((part) => { const m = /^(\d+)[–\-](\d+)$/.exec(part); if (m) pushRange(+m[1], +m[2]); else if (/^\d+$/.test(part)) nums.push(+part); });
+    });
+    const mapped = [...new Set(nums.map((x) => (map.has(x) ? map.get(x) : x)))].sort((a, b) => a - b);
+    const ranges = [];
+    mapped.forEach((x) => { const l = ranges[ranges.length - 1]; if (l && x === l[1] + 1) l[1] = x; else ranges.push([x, x]); });
+    const dash = /-/.test(str) && !/–/.test(str) ? "-" : "–";
+    const one = ([a, b]) => (a === b ? [String(a)] : b === a + 1 ? [String(a), String(b)] : [`${a}${dash}${b}`]);
+    if (brackets.length > 1) // gaya "[1], [3]" / "[3]–[5]": tiap nomor dalam kurung sendiri
+      return ranges.map(([a, b]) => (a === b ? `[${a}]` : b === a + 1 ? `[${a}], [${b}]` : `[${a}]${dash}[${b}]`)).join(", ");
+    return "[" + ranges.flatMap(one).join(", ") + "]";
+  }
+
   function classifyReferences(blocks, sec, profile) {
     const det = profile.detect, rc = profile.references;
     const myNames = new Set(sectionNames(sec));
@@ -1790,7 +1859,7 @@
     classifyAbstract, abstractParagraphs, pickAbstractTarget, abstractTargetsInCell, isAbstractNoise, RE_ABSTRACT_HEAD,
     DEFAULT_PROFILE, PRESETS, presetFor, mergeProfile, clone,
     parseInput, parseHtml, splitWhole, wholeHeading, wholeHeadingMap, parseText, classify, classifyReferences, classifyExisting,
-    ieeeAutoItalic, paraFormat, finalRuns, prepareItems, prepareEquation, equationOptions, findDisplayLatex, inlineMathSpans, isLostLatex, runsFromOoxml, ooxmlKinds, cleanAttribution, looksLikeEquation, looksLikeAttribution, countWords, plain, normalizeRuns, titleCase, apaAutoItalic, linkUrls,
+    findDuplicateRefs, renumberMap, renumberCitation, RE_CITE_GROUP, refNum, ieeeAutoItalic, paraFormat, finalRuns, prepareItems, prepareEquation, equationOptions, findDisplayLatex, inlineMathSpans, isLostLatex, runsFromOoxml, ooxmlKinds, cleanAttribution, looksLikeEquation, looksLikeAttribution, countWords, plain, normalizeRuns, titleCase, apaAutoItalic, linkUrls,
     findSectionHeadings, sectionRange, pickAnchor, planNewSection, countDocument, normHead,
     CM,
   };

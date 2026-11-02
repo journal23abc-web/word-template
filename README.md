@@ -11,6 +11,8 @@ Tempel isi artikel per bagian (Introduction, Method, Results and Discussion, Con
 - **Abstrak**: kartu ABSTRACT mengganti teks di kotak abstrak (bukan menambah). Abstrak terstruktur (*Purpose – / Methodology – / Findings – …*) dikenali otomatis dari tempelan (juga *Design/methodology/approach:*, *Tujuan:*, dll.); labelnya dibuat **bold** dan pemisahnya diseragamkan sesuai template. Abstrak satu paragraf diformat sesuai ukuran dan perataan template. Baris *Keywords* di tempelan dilewati. Abstrak lama bisa dikembalikan, dan jumlah kata dibandingkan dengan batas abstrak jurnal
 - **Cek kesesuaian** (tab **Cek**): mencocokkan *To cite this article*, baik di badan dokumen, tabel, maupun footer, dengan artikelnya. Yang dicek: penulis (nama, urutan, inisial), judul, nama jurnal, volume/nomor, tahun, halaman (dibandingkan dengan nomor halaman awal dokumen), DOI (format, kelengkapan, kecocokan vX iY dan DOI di header), serta tanda baca (titik ganda, spasi ganda, placeholder). Juga memeriksa **article history**: tanggal terbaca dan valid, urutan Received ≤ Revised ≤ Accepted, dan jarak Received → Accepted **maks. 3 bulan** (bisa diubah per jurnal), tidak melewati bulan terbit, serta tanggal di masa depan. Selain itu memeriksa header/footer (placeholder "Author", "Title…", "XXXX"; running head penulis dan judul; nama jurnal) dan batas kata
 - **Hapus isi bagian**: kosongkan seluruh isi satu bagian di dokumen (atau semua bagian sekaligus) dengan judul bagian tetap ada, misalnya untuk mengganti Introduction dengan versi baru. Ada konfirmasi dan tombol **Kembalikan isi yang dihapus** (selama panel masih terbuka), dan Ctrl+Z tetap bisa dipakai
+- **Rapikan semua** (di menu Tempel keseluruhan): rapikan semua bagian di dokumen sekaligus, dengan ringkasan per bagian
+- **Referensi ganda dihapus** saat Rapikan di bagian References: dikenali dari teks yang sama (walau beda huruf besar/tanda baca/DOI vs tanpa DOI), DOI yang sama, atau penulis pertama + tahun sama dengan isi ≥ 85% mirip. Yang dipertahankan versi yang lebih lengkap (ber-DOI). Pada gaya **IEEE bernomor**, yang pertama dipertahankan, nomor referensi diurutkan ulang, dan **sitasi [n] di badan artikel (termasuk tabel) ikut disesuaikan**, misalnya [1], [3] → [1] dan [2]–[4] → [1]–[3]
 - **Rapikan isi yang ada**: terapkan format template ke paragraf yang sudah terlanjur ditempel manual (italic tidak diubah), **termasuk tabel** di bagian itu: garis vertikal dihapus, garis gaya APA (atas, bawah judul kolom, bawah tabel), font & ukuran tabel, judul kolom bold, perataan sel. Baris rumus yang masih berupa teks juga diubah menjadi persamaan Word
 - **Kutipan langsung** (mis. kutipan wawancara “…” Guru, S1) dikenali dan diformat sesuai APA 7 (lihat di bawah)
 - **Rumus / persamaan** (tab **Rumus**): membuat, menyalin, dan menempel rumus sebagai **persamaan Word asli** (bisa diedit dengan Equation Editor), lengkap dengan nomor (1), (2) rata kanan. Lihat bagian *Rumus* di bawah
@@ -105,6 +107,10 @@ tests/                uji otomatis (Playwright)
 Kebutuhan: Word 2016 ke atas / Microsoft 365 / Word Mac / Word web. Fitur "Hapus sisipan terakhir" butuh WordApi 1.4 (Microsoft 365 / Word 2021).
 
 ## 6. Catatan versi
+
+**v11:**
+- Rapikan di References menghapus referensi ganda (IEEE: nomor & sitasi di teks disesuaikan).
+- Tombol **Rapikan semua** di menu Tempel keseluruhan.
 
 **v10.1 (perbaikan error "GeneralException (Paragraph.insertOoxml)"):**
 - Rumus yang disalin dari persamaan Word sebagai teks (huruf matematika 𝑖 𝑡 𝜀) kini dibaca utuh; sebelumnya hurufnya terpotong sehingga Word menolak rumusnya. `SHIP𝑖𝑡`, `Yit` → SHIPᵢₜ, Yᵢₜ; `1.58×10−7` → 1.58 × 10⁻⁷.

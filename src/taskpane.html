@@ -6,7 +6,7 @@
   <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
   <title>Template Paste</title>
   <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
-  <link rel="stylesheet" href="taskpane.css?v=10.1" />
+  <link rel="stylesheet" href="taskpane.css?v=11.0" />
 </head>
 <body>
 <div class="app">
@@ -36,6 +36,12 @@
       <button class="btn primary" id="wholeInsert">Sisipkan semua ke dokumen</button>
       <button class="btn ghost" id="wholeReview" title="Lihat dan ubah hasil deteksi tiap bagian">Periksa di Tempel bagian</button>
       <button class="btn ghost" id="wholeClear">Kosongkan tempelan</button>
+    </div>
+    <div class="tidy-card">
+      <div class="tidy-title">Rapikan semua bagian di dokumen</div>
+      <p class="hint m0">Terapkan format template ke isi yang sudah ada di dokumen, semua bagian sekaligus: sub-heading, kutipan, caption, tabel, rumus, dan referensi (referensi ganda dihapus).</p>
+      <button class="btn" id="tidyAll">Rapikan semua</button>
+      <div id="tidyResult"></div>
     </div>
   </main>
 
@@ -202,10 +208,10 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="math.js?v=10.1"></script>
-  <script src="engine.js?v=10.1"></script>
-  <script src="check.js?v=10.1"></script>
-  <script src="word-ops.js?v=10.1"></script>
-  <script src="taskpane.js?v=10.1"></script>
+  <script src="math.js?v=11.0"></script>
+  <script src="engine.js?v=11.0"></script>
+  <script src="check.js?v=11.0"></script>
+  <script src="word-ops.js?v=11.0"></script>
+  <script src="taskpane.js?v=11.0"></script>
 </body>
 </html>

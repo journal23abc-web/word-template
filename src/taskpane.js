@@ -338,7 +338,48 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     try { await doInsert(state.profile.sections.map((s) => s.key)); } finally { state.mode = prev; }
     renderWhole();
   }
+  /** Rapikan semua bagian yang ada di dokumen, satu per satu. */
+  async function tidyAll() {
+    if (!needWord()) return;
+    setBusy(true);
+    const host = $("#tidyResult");
+    host.innerHTML = '<span class="muted">Merapikan…</span>';
+    const rows = [], dups = [];
+    let ok = 0, fail = 0, skipped = 0;
+    try {
+      await refreshScan();
+      for (const s of state.profile.sections) {
+        if (s.kind === "abstract") continue;
+        if (!state.found[s.key]) { skipped++; continue; }
+        try {
+          const r = await WordOps.reformatSection(s.key, state.profile);
+          ok++;
+          let d;
+          if (s.kind === "references") {
+            d = `${r.formatted - (r.dupRemoved || 0)} referensi` + (r.dupRemoved ? `, ${r.dupRemoved} ganda dihapus` + (r.renumbered ? `, ${r.citations} sitasi disesuaikan` : "") : "");
+            (r.dupList || []).forEach((x) => dups.push(x));
+          } else {
+            const bits = [`${r.formatted} paragraf`];
+            if (r.headings) bits.push(`${r.headings} sub-heading`);
+            if (r.tables) bits.push(`${r.tables} tabel`);
+            if (r.quotes) bits.push(`${r.quotes} kutipan`);
+            if (r.equations) bits.push(`${r.equations} rumus`);
+            if (r.tableErrors) bits.push(`${r.tableErrors} tabel gagal`);
+            d = bits.join(" · ");
+          }
+          rows.push(`<div class="tr"><span>${esc(s.title)}</span><span class="tn">${esc(d)}</span></div>`);
+        } catch (e) {
+          fail++;
+          rows.push(`<div class="tr err"><span>${esc(s.title)}</span><span class="tn">gagal: ${esc(errMsg(e))}</span></div>`);
+        }
+      }
+      host.innerHTML = rows.join("") + (dups.length ? `<details><summary>${dups.length} referensi ganda yang dihapus</summary>${dups.map((x) => `<p>${esc(x)}…</p>`).join("")}</details>` : "");
+      toast(ok ? `✓ ${ok} bagian dirapikan${fail ? `, ${fail} gagal` : ""}${dups.length ? `, ${dups.length} referensi ganda dihapus` : ""}.` + (skipped ? ` ${skipped} bagian tidak ada di dokumen.` : "") : "Tidak ada bagian template yang ditemukan di dokumen.", fail || !ok ? "err" : "ok", 7000);
+    } catch (e) { host.innerHTML = ""; toast("Gagal merapikan: " + errMsg(e), "err"); }
+    finally { setBusy(false); }
+  }
   function initWhole() {
+    $("#tidyAll").addEventListener("click", tidyAll);
     const d = $("#wholeDrop");
     d.addEventListener("paste", onWholePaste);
     d.addEventListener("keydown", (ev) => { if (!(ev.ctrlKey || ev.metaKey) && ev.key.length === 1) ev.preventDefault(); });
@@ -442,6 +483,10 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     setBusy(true);
     try {
       const r = await WordOps.reformatSection(key, state.profile);
+      if (sec(key) && sec(key).kind === "references") {
+        toast(`✓ ${r.formatted - (r.dupRemoved || 0)} referensi dirapikan.` + (r.dupRemoved ? ` ${r.dupRemoved} referensi ganda dihapus${r.renumbered ? `, nomor diurutkan ulang dan ${r.citations} sitasi di teks disesuaikan` : ""}.` : " Tidak ada referensi ganda."), "ok", r.dupRemoved ? 9000 : 5000);
+        return;
+      }
       const warn = r.tableErrors || r.equationErrors || r.mathType;
       toast(`✓ ${r.formatted} paragraf dirapikan (${r.headings} sub-heading${r.quotes ? `, ${r.quotes} kutipan` : ""}${r.tables ? `, ${r.tables} tabel` : ""}${r.equations ? `, ${r.equations} rumus diubah jadi persamaan Word` : ""}${r.inlineMath ? `, ${r.inlineMath} rumus dalam kalimat dirapikan` : ""}).`
         + (r.tableErrors ? ` ${r.tableErrors} tabel gagal dirapikan (mungkin sel gabungan rumit).` : "")

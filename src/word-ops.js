@@ -424,6 +424,10 @@
       });
       await context.sync();
 
+      // referensi ganda dihapus (IEEE: nomor & sitasi di badan artikel ikut disesuaikan)
+      const dup = sec.kind === "references" ? await dedupeReferences(context, paras, infos, idx, range) : { removed: 0 };
+      if (sec.kind === "references") return { formatted: n, headings: 0, quotes: 0, tables: 0, tableErrors: 0, equations: 0, dupRemoved: dup.removed, dupList: dup.list || [], renumbered: dup.renumbered || 0, citations: dup.citations || 0 };
+
       // rumus: baris rumus berupa teks -> persamaan Word; nomor "(1)" di baris terpisah digabung
       const eqRes = await fixEquations(context, paras, infos, idx, items, profile);
       n += eqRes.converted;
@@ -548,6 +552,72 @@
         res.converted++;
       } catch (e) { res.errors++; console.warn("rumus gagal diubah", e); }
     }
+    return res;
+  }
+
+  /**
+   * Hapus referensi ganda di daftar referensi. Gaya bernomor [n]: nomor referensi diurutkan ulang dan
+   * sitasi [n] di badan artikel (termasuk tabel) diganti ke nomor baru.
+   */
+  async function dedupeReferences(context, paras, infos, idx, range) {
+    const res = { removed: 0, list: [], renumbered: 0, citations: 0 };
+    const refIdx = idx.filter((j) => (infos[j].text || "").trim());
+    const texts = refIdx.map((j) => infos[j].text);
+    const d = E.findDuplicateRefs(texts);
+    if (!d.remove.length) return res;
+    const lastDoc = infos.length - 1;
+    for (let k = d.remove.length - 1; k >= 0; k--) {
+      const j = refIdx[d.remove[k]];
+      if (j === lastDoc) paras[j].clear(); else paras[j].delete(); // paragraf terakhir dokumen tidak bisa dihapus
+    }
+    await context.sync();
+    res.removed = d.remove.length;
+    res.list = d.remove.map((r) => texts[r].trim().slice(0, 90));
+    if (!d.numbered) return res;
+
+    // --- penomoran ulang [n] ---
+    const removed = {};
+    d.remove.forEach((r) => { removed[E.refNum(texts[r])] = E.refNum(texts[d.keep[r]]); });
+    const rest = refIdx.map((j, i) => i).filter((i) => !d.remove.includes(i));
+    const map = E.renumberMap(rest.map((i) => E.refNum(texts[i])), removed);
+    for (const i of rest) {
+      const t = texts[i], old = E.refNum(t), nw = map.get(old);
+      if (old === nw) continue;
+      const lab = /^\s*(\[\d+\]|\d+\.)/.exec(t)[1];
+      const hit = paras[refIdx[i]].search(lab, { matchCase: true }).getFirstOrNullObject();
+      hit.insertText(/^\[/.test(lab) ? `[${nw}]` : `${nw}.`, "Replace");
+      res.renumbered++;
+    }
+    await context.sync();
+
+    // --- sitasi di badan artikel: ganti per kelompok, yang terpanjang dulu, lewat token sementara ---
+    const jobs = [];
+    infos.forEach((info, j) => {
+      if (j >= range.start && j < range.end) return; // daftar referensi sendiri
+      const t = info.text || "";
+      if (!/\[\s*\d/.test(t)) return;
+      const seen = new Set();
+      (t.match(E.RE_CITE_GROUP) || []).forEach((g) => {
+        if (seen.has(g)) return; seen.add(g);
+        const ng = E.renumberCitation(g, map);
+        if (ng !== g && g.length <= 250) jobs.push({ j, old: g, nw: ng });
+      });
+    });
+    if (!jobs.length) return res;
+    jobs.forEach((jb, k) => { jb.tok = "⟦" + k + "⟧"; });
+    const lens = [...new Set(jobs.map((jb) => jb.old.length))].sort((a, b) => b - a);
+    for (const L of lens) { // fase 1: sitasi lama -> token (yang panjang dulu agar "[1]" tidak terambil dari "[1], [3]")
+      const batch = jobs.filter((jb) => jb.old.length === L);
+      batch.forEach((jb) => { jb.hits = paras[jb.j].search(jb.old, { matchCase: true }); jb.hits.load("items"); });
+      await context.sync();
+      batch.forEach((jb) => { const its = jb.hits.items; its.forEach((h) => h.insertText(jb.tok, "Replace")); res.citations += its.length; });
+      await context.sync();
+    }
+    // fase 2: token -> sitasi baru
+    jobs.forEach((jb) => { jb.hits2 = paras[jb.j].search(jb.tok, { matchCase: true }); jb.hits2.load("items"); });
+    await context.sync();
+    jobs.forEach((jb) => jb.hits2.items.forEach((h) => h.insertText(jb.nw, "Replace")));
+    await context.sync();
     return res;
   }
 
