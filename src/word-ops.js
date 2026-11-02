@@ -8,6 +8,7 @@
   const BOOKMARK = "_TplPasteLast";
   const LINK_COLOR = "#0563C1";
 
+  const hasDesktop = (v) => { try { return typeof Office !== "undefined" && Office.context.requirements.isSetSupported("WordApiDesktop", v); } catch (e) { return false; } };
   const has = (v) => typeof Office !== "undefined" && Office.context && Office.context.requirements && Office.context.requirements.isSetSupported("WordApi", v);
 
   /* ---------------- gaya ---------------- */
@@ -95,24 +96,39 @@
     const f = { name: profile.font, size: T.size, bold: false, color: profile.color, highlightColor: null };
     if (!opts.existing) f.italic = false;
     tbl.font.set(f);
-    tbl.headerRowCount = 1;
     const rows = t.rows.items, n = rows.length;
+    // judul kolom: 1 baris, atau 2 baris bila baris pertama berisi sel gabungan (sel lebih sedikit dari baris data)
+    const cc = rows.map((r) => (typeof r.cellCount === "number" ? r.cellCount : 0));
+    const maxC = Math.max(0, ...cc);
+    const hRows = n >= 3 && cc[0] && cc[0] < maxC && cc[1] === maxC ? 2 : 1;
+    // judul kolom diulang di atas tiap halaman (Repeat as header row)
+    if (T.repeatHeader !== false) tbl.headerRowCount = Math.min(hRows, Math.max(1, n - 1));
     if (T.apaBorders) {
       ["Left", "Right", "InsideHorizontal", "InsideVertical"].forEach((loc) => line(tbl.getBorder(loc), false));
       ["Top", "Bottom"].forEach((loc) => line(tbl.getBorder(loc), true));
       // garis per baris — menimpa garis yang dipasang per sel (umum di naskah hasil konversi)
       rows.forEach((row, r) => {
         ["Left", "Right", "InsideVertical"].forEach((loc) => line(row.getBorder(loc), false));
-        if (r === 0) { line(row.getBorder("Top"), true); line(row.getBorder("Bottom"), true); }
+        if (r === 0) line(row.getBorder("Top"), true);
+        if (r < hRows) { line(row.getBorder("Bottom"), r === hRows - 1); if (r > 0) line(row.getBorder("Top"), false); }
         else {
-          if (r >= 2) line(row.getBorder("Top"), false);
+          if (r >= hRows + 1) line(row.getBorder("Top"), false);
           line(row.getBorder("Bottom"), r === n - 1);
         }
       });
     }
-    if (rows[0]) rows[0].font.bold = !!T.headerBold;
+    rows.slice(0, hRows).forEach((r) => { r.font.bold = !!T.headerBold; });
     tbl.horizontalAlignment = T.cellAlign || "Centered";
     if (T.firstColLeft) rows.forEach((row) => { row.cells.getFirst().horizontalAlignment = "Left"; });
+    // AutoFit to contents (Word desktop baru: WordApiDesktop 1.4), lalu tabel di tengah halaman
+    let autofit = null;
+    if (T.autoFit && T.autoFit !== "none") {
+      if (hasDesktop("1.4")) { tbl.autoFitBehavior(T.autoFit === "window" ? "Window" : "Content"); autofit = true; }
+      else if (T.autoFit === "window") { tbl.autoFitWindow(); autofit = true; }
+      else autofit = false;
+    }
+    if (T.align) tbl.alignment = T.align;
+    return { autofit, headerRows: hRows };
   }
 
   /**
@@ -123,7 +139,7 @@
     opts = opts || {};
     const items = E.prepareItems(items0, profile); // kutipan: format APA 7
     let cursor = start, cursorIsTable = false, detachNext = !!opts.anchorIsList;
-    let first = null, last = null, count = 0, sinceSync = 0, equations = 0, eqFallback = 0;
+    let first = null, last = null, count = 0, sinceSync = 0, equations = 0, eqFallback = 0, autofitUnsupported = false;
     const tables = [];
     for (const it of items) {
       if (it.type === "skip") continue;
@@ -176,12 +192,12 @@
     }
     await context.sync();
     if (tables.length) {
-      for (const t of tables) { t.paras = t.table.getRange("Whole").paragraphs; t.paras.load("items"); t.rows = t.table.rows; t.rows.load("items"); }
+      for (const t of tables) { t.paras = t.table.getRange("Whole").paragraphs; t.paras.load("items"); t.rows = t.table.rows; t.rows.load("items/cellCount"); }
       await context.sync();
-      for (const t of tables) formatTable(t, profile);
+      for (const t of tables) { const fr = formatTable(t, profile); if (fr && fr.autofit === false) autofitUnsupported = true; }
       await context.sync();
     }
-    return { first, last, count, equations, eqFallback, endsWithTable: cursorIsTable };
+    return { first, last, count, equations, eqFallback, autofitUnsupported, endsWithTable: cursorIsTable };
   }
 
   /* ---------------- rumus (OMML) ---------------- */
@@ -358,7 +374,7 @@
 
       // hitung ulang kata
       const st = await readStructure(context, profile);
-      return { inserted: res.count, created, missingStyles: missing, eqFallback: res.eqFallback || 0, count: E.countDocument(st.infos, st.heads, profile) };
+      return { inserted: res.count, created, missingStyles: missing, eqFallback: res.eqFallback || 0, autofitUnsupported: !!res.autofitUnsupported, count: E.countDocument(st.infos, st.heads, profile) };
     });
   }
 
@@ -433,7 +449,7 @@
       n += eqRes.converted;
 
       // tabel di bagian ini — jalan dari paragraf tabel pertama, lompati seluruh paragraf tabel itu
-      let tablesDone = 0, tableErrors = 0;
+      let tablesDone = 0, tableErrors = 0, autofitUnsupported = false;
       for (let j = range.start + 1; j < range.end; ) {
         if (!infos[j].inTable) { j++; continue; }
         let next = j + 1;
@@ -444,9 +460,10 @@
           await context.sync();
           next = j + Math.max(1, tps.items.length);
           const t = { table: tbl, paras: tps, rows: tbl.rows };
-          t.rows.load("items");
+          t.rows.load("items/cellCount");
           await context.sync();
-          formatTable(t, profile, { existing: true });
+          const fr = formatTable(t, profile, { existing: true });
+          if (fr && fr.autofit === false) autofitUnsupported = true;
           await context.sync();
           tablesDone++;
         } catch (e) {
@@ -456,7 +473,7 @@
         j = next;
       }
       return { formatted: n, headings: items.filter((i) => i && i.type === "heading").length, quotes: quotesFixed, tables: tablesDone, tableErrors,
-        equations: eqRes.converted, inlineMath: eqRes.inline, equationsOk: eqRes.alreadyOk, mathType: eqRes.mathType, equationErrors: eqRes.errors };
+        equations: eqRes.converted, inlineMath: eqRes.inline, autofitUnsupported, equationsOk: eqRes.alreadyOk, mathType: eqRes.mathType, equationErrors: eqRes.errors };
     });
   }
 
@@ -1068,5 +1085,5 @@
     });
   }
 
-  root.WordOps = { insertEquation, convertSelection, readSelectedEquation, nextEquationNumber, collectMeta, scan, insertSection, reformatSection, clearSection, restoreSection, insertAbstract, clearAbstract, restoreAbstract, countWords, undoLast, _internal: { insertItems, formatNewParagraph, setStyle, placeEquation, readTextWidthCm } };
+  root.WordOps = { insertEquation, convertSelection, readSelectedEquation, nextEquationNumber, collectMeta, scan, insertSection, reformatSection, clearSection, restoreSection, insertAbstract, clearAbstract, restoreAbstract, countWords, undoLast, _internal: { insertItems, formatNewParagraph, setStyle, placeEquation, readTextWidthCm, formatTable } };
 })(typeof self !== "undefined" ? self : this);

@@ -108,6 +108,11 @@ Kebutuhan: Word 2016 ke atas / Microsoft 365 / Word Mac / Word web. Fitur "Hapus
 
 ## 6. Catatan versi
 
+**v11.1 (tabel):**
+- Tabel yang ditempel atau dirapikan otomatis **AutoFit to contents** dan diletakkan di tengah. Butuh Word desktop versi baru (Microsoft 365); di versi lama lebar tabel dibiarkan dan add-in memberi tahu.
+- Baris judul kolom diberi **Repeat as header row** (diulang di atas tiap halaman). Judul kolom dua baris (sel gabungan) dikenali, sehingga kedua barisnya diulang dan garis APA ada di bawah baris kedua.
+- Bisa diatur di Template → Tabel yang ditempel: Lebar tabel (contents / window / biarkan), ulangi baris judul, posisi tabel.
+
 **v11:**
 - Rapikan di References menghapus referensi ganda (IEEE: nomor & sitasi di teks disesuaikan).
 - Tombol **Rapikan semua** di menu Tempel keseluruhan.

@@ -402,7 +402,7 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
     if (state.mode === "cursor" && todo.length > 1) { toast("Mode kursor hanya untuk satu bagian sekaligus. Pilih 'Akhir bagian'.", "err"); return; }
     setBusy(true);
     try {
-      let last = null, total = 0, eqText = 0;
+      let last = null, total = 0, eqText = 0, afNo = false;
       for (const k of todo) {
         const items = pend(k).items;
         if (isAbs(k)) {
@@ -416,7 +416,7 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
           continue;
         }
         last = await WordOps.insertSection(k, items, state.profile, state.mode);
-        total += last.inserted; eqText += last.eqFallback || 0;
+        total += last.inserted; eqText += last.eqFallback || 0; if (last.autofitUnsupported) afNo = true;
         if (last.missingStyles && last.missingStyles.length) toast("Gaya tidak ditemukan, dipakai Normal: " + last.missingStyles.join(", "), "err");
         state.pending[k] = null;
       }
@@ -425,6 +425,7 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
       const c = last.count;
       const over = c.limit && c.total > c.limit;
       toast(`✓ ${total} blok disisipkan. Total isi ${fmtN(c.total)}${c.limit ? " / " + fmtN(c.limit) : ""} kata${over ? " — MELEBIHI BATAS" : ""}.`
+        + (afNo ? " AutoFit to contents belum didukung Word versi ini — lebar tabel dibiarkan (atur lewat Layout → AutoFit)." : "")
         + (eqText ? ` ${eqText} rumus ditolak Word sebagai persamaan dan disisipkan sebagai teks — blok barisnya lalu pakai Rumus → "Ubah teks terpilih jadi rumus".` : ""), over || eqText ? "err" : "ok", eqText ? 10000 : 6000);
       if (!$("#tab-words").classList.contains("hidden")) renderCounts(c);
     } catch (e) {
@@ -490,6 +491,7 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
       const warn = r.tableErrors || r.equationErrors || r.mathType;
       toast(`✓ ${r.formatted} paragraf dirapikan (${r.headings} sub-heading${r.quotes ? `, ${r.quotes} kutipan` : ""}${r.tables ? `, ${r.tables} tabel` : ""}${r.equations ? `, ${r.equations} rumus diubah jadi persamaan Word` : ""}${r.inlineMath ? `, ${r.inlineMath} rumus dalam kalimat dirapikan` : ""}).`
         + (r.tableErrors ? ` ${r.tableErrors} tabel gagal dirapikan (mungkin sel gabungan rumit).` : "")
+        + (r.autofitUnsupported ? " AutoFit to contents belum didukung Word versi ini — lebar tabel dibiarkan." : "")
         + (r.equationErrors ? ` ${r.equationErrors} rumus gagal diubah — coba blok barisnya lalu pakai tab Rumus.` : "")
         + (r.mathType ? ` ${r.mathType} rumus berupa objek MathType/Equation 3.0 — tidak bisa diubah otomatis; klik dua kali objeknya lalu simpan ulang sebagai persamaan Word.` : ""), warn ? "err" : "ok", warn ? 9000 : 5000);
     } catch (e) { toast(errMsg(e), "err"); } finally { setBusy(false); }
@@ -716,6 +718,9 @@ const isAbs = (key) => { const x = sec(key); return !!x && x.kind === "abstract"
       ["cellAlign", "Perataan isi sel", "select", { options: ALIGN }],
       ["size", "Ukuran font tabel (pt)", "number", { step: 0.5 }], ["headerBold", "Baris judul tebal", "bool"],
       ["apaBorders", "Garis gaya APA (atas, bawah, bawah judul)", "bool"], ["firstColLeft", "Kolom pertama rata kiri", "bool"],
+      ["autoFit", "Lebar tabel", "select", { options: [["content", "AutoFit to contents"], ["window", "AutoFit to window (selebar halaman)"], ["none", "Biarkan"]] }],
+      ["repeatHeader", "Ulangi baris judul kolom di tiap halaman (Repeat as header row)", "bool"],
+      ["align", "Posisi tabel", "select", { options: [["Centered", "Tengah"], ["Left", "Kiri"]] }],
     ] },
     { title: "Referensi", prefix: "references", fields: [
       ...paraFields({ hanging: true }),

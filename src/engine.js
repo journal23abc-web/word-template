@@ -56,7 +56,8 @@
                apa: 1, minBlockWords: 40, removeMarks: true, attribution: "paren", mergeAttribution: true },
     // Rumus: disisipkan sebagai persamaan Word asli (OMML). numbering: 'tab' (nomor rata kanan) | 'after' | 'native' (Word 365 "#") | 'none'
     equation: { align: "Centered", numbering: "tab", textWidthCm: 16.5, size: 11, before: 6, after: 6, autoConvert: true },
-    table:   { size: 10, headerBold: true, apaBorders: true, firstColLeft: true, cellAlign: "Centered" },
+    // autoFit: 'content' (AutoFit to contents) | 'window' | 'none'; repeatHeader: judul kolom diulang tiap halaman
+    table:   { size: 10, headerBold: true, apaBorders: true, firstColLeft: true, cellAlign: "Centered", autoFit: "content", repeatHeader: true, align: "Centered" },
     references: {
       style: "Normal", size: 11, align: "Justified", hangingCm: 1.27, before: 0, after: 6, line: 1,
       sort: false, autoItalic: true, linkDoi: true, stripNumbering: true,
