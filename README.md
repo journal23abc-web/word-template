@@ -108,6 +108,9 @@ Kebutuhan: Word 2016 ke atas / Microsoft 365 / Word Mac / Word web. Fitur "Hapus
 
 ## 6. Catatan versi
 
+**v11.2:**
+- Perbaikan error *GeneralException (Document._GetObjectByReferenceId)* saat "Hapus isi semua bagian…" / "Hapus isi bagian ini" pada bagian paling akhir dokumen (biasanya REFERENCES).
+
 **v11.1 (tabel):**
 - Tabel yang ditempel atau dirapikan otomatis **AutoFit to contents** dan diletakkan di tengah. Butuh Word desktop versi baru (Microsoft 365); di versi lama lebar tabel dibiarkan dan add-in memberi tahu.
 - Baris judul kolom diberi **Repeat as header row** (diulang di atas tiap halaman). Judul kolom dua baris (sel gabungan) dikenali, sehingga kedua barisnya diulang dan garis APA ada di bawah baris kedua.

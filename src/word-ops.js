@@ -704,12 +704,17 @@
 
       const first = paras[range.start + 1];
       const hasNext = range.nextIndex >= 0;
-      const rng = hasNext
-        ? first.getRange("Start").expandTo(paras[range.end].getRange("Start"))
-        : first.getRange("Start").expandTo(paras[paras.length - 1].getRange("End"));
-      const ox = rng.getOoxml();
+      const lastIdx = paras.length - 1;
+      // cadangan isi (untuk "Kembalikan")
+      const ox = (hasNext ? first.getRange("Start").expandTo(paras[range.end].getRange("Start")) : first.getRange("Start").expandTo(paras[lastIdx].getRange("End"))).getOoxml();
       await context.sync();
-      rng.delete();
+      if (hasNext) first.getRange("Start").expandTo(paras[range.end].getRange("Start")).delete();
+      else {
+        // bagian terakhir dokumen: paragraf terakhir tidak boleh ikut dihapus (Word membuatnya ulang dan judul bagian
+        // bisa tergabung) — hapus sampai sebelum paragraf terakhir, lalu kosongkan paragraf terakhir
+        if (range.start + 1 < lastIdx) first.getRange("Start").expandTo(paras[lastIdx].getRange("Start")).delete();
+        paras[lastIdx].clear();
+      }
       await context.sync();
       if (hasNext && profile.layout.blankBeforeSection) {
         // sisakan satu baris kosong sebelum judul bagian berikutnya
@@ -720,8 +725,12 @@
           formatNewParagraph(blank, { type: "blank" }, profile);
         }
       }
-      paras[range.start].getRange("End").select("End");
-      await context.sync();
+      // letakkan kursor di akhir judul bagian — ambil ulang paragrafnya (objek lama bisa sudah tidak berlaku)
+      try {
+        const st2 = await readStructure(context, profile);
+        const r3 = E.sectionRange(st2.infos, st2.heads, key);
+        if (r3) { st2.paras[r3.start].getRange("End").select("End"); await context.sync(); }
+      } catch (e) { /* memindahkan kursor tidak penting */ }
       return { deleted: n, words, ooxml: ox.value };
     });
   }
